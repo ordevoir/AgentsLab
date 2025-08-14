@@ -1,0 +1,7 @@
+env:
+  id: CartPole-v1
+  render_mode: null   # null | "human" | "rgb_array" (для видео)
+  record_video: false
+  video_dir: ${hydra:run.dir}/videos
+  record_stats: true
+

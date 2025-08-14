@@ -1,0 +1,10 @@
+train:
+  episodes: 800
+  lr: 5e-3
+  log_every: 10
+  solved_threshold: 500.0
+  solved_window: 20
+  eval_every: 50
+  eval_episodes: 5
+  save_best: true
+

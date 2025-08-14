@@ -1,0 +1,13 @@
+# Hydra / TB / артефакты
+outputs/
+multirun/
+logs/
+checkpoints/
+**/tb/
+**/*.mp4
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+.env/

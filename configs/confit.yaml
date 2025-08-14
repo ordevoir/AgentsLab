@@ -1,0 +1,20 @@
+# Главная композиция Hydra
+defaults:
+  - algorithm: reinforce
+  - environment: cartpole
+  - network: mlp
+  - training: reinforce_cartpole
+  - logging: tensorboard
+  - _self_
+
+# Общие семена и системные настройки
+seed: 42
+
+# Hydra каталоги вывода
+hydra:
+  run:
+    dir: outputs/${now:%Y-%m-%d_%H-%M-%S}
+  sweep:
+    dir: multirun/${now:%Y-%m-%d_%H-%M-%S}
+    subdir: ${hydra.job.num}
+
