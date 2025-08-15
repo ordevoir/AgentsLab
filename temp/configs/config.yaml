@@ -1,0 +1,15 @@
+# Main Hydra config
+defaults:
+  - rl/env: cartpole
+  - rl/model: mlp_policy
+  - rl/optimizer: adam
+  - rl/training: reinforce
+  - common: logging
+  - _self_
+
+hydra:
+  run:
+    dir: outputs/${now:%Y-%m-%d_%H-%M-%S}  # per-run folder
+
+seed: 42
+device: "cpu"  # or "cuda"

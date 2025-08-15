@@ -1,0 +1,9 @@
+
+# Lightweight profile for CartPole sanity checks
+seed: 0
+device: auto
+num_episodes: 200
+max_steps: 500
+eval_every: 25
+save_every: 100
+hidden_sizes: ${rl.network.hidden_sizes}

@@ -1,0 +1,4 @@
+
+# Common settings
+project_name: AgentsLab
+deterministic_cudnn: false

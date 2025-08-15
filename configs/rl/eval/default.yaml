@@ -1,0 +1,11 @@
+
+# Generic evaluation profile (override via CLI as needed)
+seed: 0
+device: auto         # auto|cpu|cuda
+num_episodes: 20
+max_steps: 500
+deterministic: true
+obs_noise_std: 0.0
+action_epsilon: 0.0
+hidden_sizes: ${rl.network.hidden_sizes}
+checkpoint_path: ""  # REQUIRED on CLI: rl.eval.checkpoint_path=/abs/or/relative/path.pt

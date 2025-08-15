@@ -1,13 +1,83 @@
-# Hydra / TB / артефакты
-outputs/
+
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# C extensions
+*.so
+
+# Distribution / packaging
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# PyInstaller
+*.manifest
+*.spec
+
+# Installer logs
+pip-log.txt
+pip-delete-this-directory.txt
+
+# Unit test / coverage reports
+htmlcov/
+.tox/
+.nox/
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+*.py,cover
+.hypothesis/
+.pytest_cache/
+junit/
+
+# Jupyter Notebook
+.ipynb_checkpoints
+
+# pyenv
+.python-version
+
+# celery beat schedule file
+celerybeat-schedule
+
+# dotenv
+.env
+.env.*
+env/
+venv/
+.venv/
+
+# Pycharm / VSCode
+.idea/
+.vscode/
+
+# Hydra outputs
 multirun/
+outputs/
+
+# Logs / checkpoints / results
 logs/
 checkpoints/
-**/tb/
-**/*.mp4
+results/
 
-# Python
-__pycache__/
-*.pyc
-.venv/
-.env/
+# OS
+.DS_Store
