@@ -1,0 +1,4 @@
+# Optimizer
+name: "adam"
+lr: 0.005
+weight_decay: 0.0

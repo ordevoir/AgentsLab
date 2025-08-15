@@ -1,0 +1,7 @@
+# REINFORCE training
+max_episodes: 500
+gamma: 0.99
+normalize_returns: true
+log_every: 10
+eval_every: 50
+save_every: 100

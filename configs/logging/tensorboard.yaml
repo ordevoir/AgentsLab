@@ -1,7 +1,0 @@
-logging:
-  enable_tensorboard: true
-  enable_csv: true
-  tb_dir: ${hydra:run.dir}/tb
-  csv_path: ${hydra:run.dir}/metrics.csv
-
-  

@@ -1,6 +1,0 @@
-name: reinforce
-# гиперпараметры алгоритма
-algo:
-  gamma: 0.99
-  grad_clip: 1.0
-
