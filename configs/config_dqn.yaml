@@ -1,0 +1,13 @@
+defaults:
+  - rl/env: cartpole
+  - rl/model: dqn_mlp
+  - rl/optimizer: adam_dqn
+  - rl/training: dqn
+  - common: logging
+
+hydra:
+  run:
+    dir: outputs/${now:%Y-%m-%d_%H-%M-%S}
+
+seed: 42
+device: "auto"
