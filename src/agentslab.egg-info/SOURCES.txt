@@ -3,6 +3,7 @@ src/agentslab/__init__.py
 src/agentslab.egg-info/PKG-INFO
 src/agentslab.egg-info/SOURCES.txt
 src/agentslab.egg-info/dependency_links.txt
+src/agentslab.egg-info/requires.txt
 src/agentslab.egg-info/top_level.txt
 src/agentslab/agents/__init__.py
 src/agentslab/agents/reinforce_agent.py
