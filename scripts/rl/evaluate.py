@@ -1,72 +1,98 @@
+# scripts/rl/evaluate.py
+from __future__ import annotations
 
 import os
+from typing import Any, Tuple
+
 import hydra
-from omegaconf import DictConfig
+import gymnasium as gym
+import numpy as np
 import torch
+from omegaconf import DictConfig, OmegaConf
 
-from agentslab.rl.eval.eval_loop import EvalConfig, evaluate_checkpoint
-from agentslab.rl.agents.dqn.agent import DQNConfig
-from agentslab.rl.agents.reinforce.agent import ReinforceConfig
+from agentslab.core.checkpointing import load_checkpoint
+from agentslab.networks.mlp import MLP
 
-@hydra.main(version_base="1.3", config_path="../../configs", config_name="config")
-def main(cfg: DictConfig) -> None:
-    # resolve device
-    device = cfg.rl.eval.device
-    if device == "auto":
-        device = "cuda" if torch.cuda.is_available() else "cpu"
 
-    # Build eval config
-    eval_cfg = EvalConfig(
-        seed=cfg.rl.eval.seed,
-        device=device,
-        num_episodes=cfg.rl.eval.num_episodes,
-        max_steps=cfg.rl.eval.max_steps,
-        deterministic=cfg.rl.eval.deterministic,
-        obs_noise_std=cfg.rl.eval.obs_noise_std,
-        action_epsilon=cfg.rl.eval.action_epsilon,
-        hidden_sizes=tuple(cfg.rl.eval.hidden_sizes),
-    )
+def _obs_dim(space) -> int:
+    if len(space.shape) == 1:
+        return int(space.shape[0])
+    return int(np.prod(space.shape))
 
-    # Agent configs (must match the trained model's architecture/hparams)
-    algo_name = "dqn" if "dqn" in cfg.rl.agent else ("reinforce" if "reinforce" in cfg.rl.agent else None)
-    if algo_name is None:
-        raise ValueError("Please select agent in defaults (rl/agent=...)")
 
-    if algo_name == "dqn":
-        agent_cfg = DQNConfig(
-            gamma=cfg.rl.agent.gamma,
-            lr=cfg.rl.agent.lr,
-            batch_size=cfg.rl.agent.batch_size,
-            buffer_size=cfg.rl.agent.buffer_size,
-            start_learning_after=cfg.rl.agent.start_learning_after,
-            target_update_every=cfg.rl.agent.target_update_every,
-            tau=cfg.rl.agent.tau,
-            eps_start=cfg.rl.agent.eps_start,
-            eps_end=cfg.rl.agent.eps_end,
-            eps_decay_steps=cfg.rl.agent.eps_decay_steps,
-            huber_delta=cfg.rl.agent.huber_delta,
-            clip_grad_norm=cfg.rl.agent.clip_grad_norm,
-        )
+def _device_from_cfg(device_cfg: str) -> torch.device:
+    if device_cfg.lower().startswith("cuda") or device_cfg.lower().startswith("gpu"):
+        return torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    if device_cfg.lower().startswith("cpu"):
+        return torch.device("cpu")
+    # "cuda if available"
+    return torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+
+@hydra.main(version_base=None, config_path="../../configs", config_name="eval")
+def main(cfg: DictConfig) -> Any:
+    if not os.path.isfile(cfg.checkpoint_path):
+        raise FileNotFoundError(f"Checkpoint not found: {cfg.checkpoint_path}")
+
+    payload = load_checkpoint(cfg.checkpoint_path, map_location="cpu")
+    meta = payload.get("meta", {})
+    model_type = str(meta.get("model_type", cfg.model)).lower()
+
+    env = gym.make(cfg.env.id, render_mode="human" if cfg.render else None)
+    obs, _ = env.reset(seed=int(cfg.env.seed))
+    obs_dim = _obs_dim(env.observation_space)
+    n_actions = env.action_space.n
+
+    device = _device_from_cfg("cuda if available")
+
+    if model_type == "dqn":
+        # Rebuild Q-network and load weights
+        hidden = tuple(meta.get("config", {}).get("rl", {}).get("network", {}).get("hidden_sizes", [128, 128]))
+        q_net = MLP(obs_dim, n_actions, hidden).to(device)
+        q_net.load_state_dict(payload["model_state_dict"]["q.net" if "q.net" in payload["model_state_dict"] else "net" ] if isinstance(payload["model_state_dict"], dict) else payload["model_state_dict"])  # fallback
+        q_net.eval()
+
+        def act_fn(ob):
+            with torch.no_grad():
+                t = torch.as_tensor(ob, dtype=torch.float32, device=device).unsqueeze(0)
+                q = q_net(t)
+                return int(torch.argmax(q, dim=1).item())
+
+    elif model_type == "reinforce":
+        hidden = tuple(meta.get("config", {}).get("rl", {}).get("network", {}).get("hidden_sizes", [128, 128]))
+        policy = MLP(obs_dim, n_actions, hidden).to(device)
+        policy.load_state_dict(payload["model_state_dict"])  # REINFORCE saved the policy weights
+        policy.eval()
+
+        def act_fn(ob):
+            with torch.no_grad():
+                t = torch.as_tensor(ob, dtype=torch.float32, device=device).unsqueeze(0)
+                logits = policy(t)
+                return int(torch.argmax(logits, dim=1).item())
+
     else:
-        agent_cfg = ReinforceConfig(
-            gamma=cfg.rl.agent.gamma,
-            lr=cfg.rl.agent.lr,
-            entropy_coef=cfg.rl.agent.entropy_coef,
-            normalize_returns=cfg.rl.agent.normalize_returns,
-            clip_grad_norm=cfg.rl.agent.clip_grad_norm,
-        )
+        raise ValueError(f"Unknown model type: {model_type}")
 
-    ckpt_path = cfg.rl.eval.checkpoint_path
-    if not ckpt_path or not os.path.exists(ckpt_path):
-        raise FileNotFoundError("Provide a valid checkpoint via rl.eval.checkpoint_path=/path/to/ckpt.pt")
+    returns = []
+    for ep in range(int(cfg.episodes)):
+        obs, _ = env.reset(seed=int(cfg.env.seed) + ep)
+        done = False
+        ep_ret = 0.0
+        ep_len = 0
+        while not done:
+            action = act_fn(obs)
+            obs, reward, terminated, truncated, _ = env.step(action)
+            done = terminated or truncated
+            ep_ret += float(reward)
+            ep_len += 1
+        print(f"Episode {ep+1}/{cfg.episodes} — Return: {ep_ret:.2f} | Length: {ep_len}")
+        returns.append(ep_ret)
 
-    _ = evaluate_checkpoint(
-        algo=algo_name,
-        env_id=cfg.rl.env.id,
-        cfg_eval=eval_cfg,
-        cfg_agent=agent_cfg,
-        checkpoint_path=ckpt_path,
-    )
+    avg = float(np.mean(returns)) if returns else 0.0
+    print(f"\nAvg return over {cfg.episodes} episodes: {avg:.2f}")
+    env.close()
+    return {"avg_return": avg}
+
 
 if __name__ == "__main__":
     main()

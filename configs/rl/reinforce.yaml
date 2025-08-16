@@ -1,0 +1,11 @@
+# configs/rl/reinforce.yaml
+name: reinforce
+device: cuda if available
+# Для REINFORCE задаём количество эпизодов, а не timesteps
+total_episodes: 1000
+gamma: 0.99
+lr: 1e-2
+normalize_returns: true
+batch_episodes: 1                 # кол-во эпизодов на один шаг оптимизации
+network:
+  hidden_sizes: [128, 128]

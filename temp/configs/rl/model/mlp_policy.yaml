@@ -1,5 +1,0 @@
-# Policy MLP config
-obs_dim: null     # auto-detected at runtime
-action_dim: null  # auto-detected at runtime
-hidden_dim: 128
-activation: "tanh"  # tanh or relu

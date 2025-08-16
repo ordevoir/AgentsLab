@@ -1,0 +1,14 @@
+# PPO algorithm config
+algorithm: ppo
+ppo:
+  gamma: 0.99
+  gae_lambda: 0.95
+  lr: 0.0003
+  hidden_sizes: [128, 128]
+  clip_coef: 0.2
+  update_epochs: 4
+  minibatch_size: 64
+  rollout_steps: 1024
+  vf_coef: 0.5
+  ent_coef: 0.01
+  max_grad_norm: 0.5

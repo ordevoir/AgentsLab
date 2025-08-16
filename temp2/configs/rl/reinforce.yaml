@@ -1,0 +1,7 @@
+# REINFORCE algorithm config
+algorithm: reinforce
+reinforce:
+  gamma: 0.99
+  lr: 0.01
+  hidden_sizes: [128, 128]
+  grad_clip: null

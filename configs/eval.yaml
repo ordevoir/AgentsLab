@@ -1,0 +1,9 @@
+# configs/eval.yaml
+# Конфиг для общего evaluate-скрипта
+model: dqn                      # или 'reinforce'
+checkpoint_path: ???           # укажите путь к .pt файлу чекпоинта
+env:
+  id: CartPole-v1
+  seed: 7
+episodes: 10
+render: false

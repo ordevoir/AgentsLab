@@ -1,12 +1,35 @@
-
-# Main config: choose RL algorithm/env/network/training via defaults.
+# configs/config.yaml
+# Главная конфигурация Hydra
 defaults:
-  - common: default
-  - rl/agent: dqn
-  - rl/env: cartpole
-  - rl/network: mlp_small
-  - rl/training: cartpole_fast
+  - rl: dqn
   - _self_
 
-# Top-level switch (rl or marl). For now we only use rl.
-mode: rl
+# Общие настройки проекта
+project:
+  name: AgentsLab
+  # Используем оригинальную рабочую директорию проекта (до изменения Hydra)
+  root_dir: ${hydra:runtime.original_cwd}
+
+env:
+  id: CartPole-v1
+  seed: 7
+  # Если null — используется дефолт из среды
+  max_episode_steps: null
+
+logging:
+  tensorboard: true
+  print_interval_episodes: 10
+  eval_interval_episodes: 50
+
+checkpoint:
+  # Папка для чекпоинтов — поддерживаем требуемую иерархию
+  dir: ${project.root_dir}/checkpoints
+  save_best: true
+  save_last_every_episodes: 50
+
+# Настройки Hydra для структуры outputs
+hydra:
+  run:
+    dir: ${project.root_dir}/outputs/${now:%Y-%m-%d}/${now:%H-%M-%S}_${rl.name}_${env.id}
+  job:
+    chdir: true

@@ -1,35 +1,33 @@
+# AgentsLab (RL)
 
-# AgentsLab (RL focus, step 1)
+Стартовые скрипты обучения и оценки (Hydra + PyTorch, без Lightning/TorchRL, без обёрток).
 
-This repo is an initial working version of your RL lab that matches your folder structure.
-It includes **vanilla REINFORCE** and **DQN** (no TorchRL / Lightning yet), Hydra configs,
-TensorBoard logging, and checkpoints. Gymnasium is used directly (no wrappers).
-
-## Install (editable)
+## Установка
 ```bash
-pip install -e .
+pip install -e ./src  # editable пакет agentslab
+pip install torch gymnasium tensorboard hydra-core omegaconf
 ```
 
-## Train
-**DQN (CartPole):**
+## Тренировка (DQN)
 ```bash
-python scripts/rl/train.py rl/agent=dqn rl/env=cartpole rl/training=cartpole_fast
+python scripts/rl/train_dqn.py rl=dqn env.id=CartPole-v1 rl.total_timesteps=50000
+```
+Параметры DQN берутся из `configs/rl/dqn.yaml`.
+
+## Тренировка (REINFORCE)
+```bash
+python scripts/rl/train_reinforce.py rl=reinforce env.id=CartPole-v1 rl.total_episodes=500
 ```
 
-**REINFORCE (CartPole):**
+## Оценка (evaluate)
 ```bash
-python scripts/rl/train.py rl/agent=reinforce rl/env=cartpole rl/training=cartpole_fast
+python scripts/rl/evaluate.py model=dqn checkpoint_path=checkpoints/rl/dqn/CartPole-v1/<run>/best.pt env.id=CartPole-v1 episodes=10 render=false
 ```
+Для REINFORCE используйте `model=reinforce`.
 
-You can customize hyper-parameters by overriding Hydra config keys on the CLI, e.g.:
-```bash
-python scripts/rl/train.py rl/agent=dqn rl.env.id=CartPole-v1 rl.training.num_episodes=500
-```
+### Логи и чекпоинты
+- Чекпоинты: `checkpoints/rl/<algo>/<env>/<run>/best.pt` и `last.pt` (+ `.meta.json`)
+- TensorBoard: `logs/rl/<algo>/<env>/<run>/`
+- Результаты: `results/rl/<algo>/<env>/<run>/summary.json`
 
-Outputs go to `outputs/` (Hydra), while additional logs/checkpoints/results are stored
-under the repo root using absolute paths (so they're not affected by Hydra's cwd change).
-
-## Notes
-- Code follows PEP8.
-- Hydra is only used in **entrypoints** (`scripts/rl/train.py`). Library code stays framework-agnostic.
-- Gymnasium API is handled (`reset` returns `(obs, info)`, `step` returns `(obs, reward, terminated, truncated, info)`).
+Конфиг Hydra задаёт структуру `outputs/` и общий root проекта.

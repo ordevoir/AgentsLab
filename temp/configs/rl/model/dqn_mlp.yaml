@@ -1,4 +1,0 @@
-obs_dim: null
-action_dim: null
-hidden_sizes: [128, 64]
-activation: "relu"

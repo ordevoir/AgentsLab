@@ -1,0 +1,9 @@
+# Training common settings
+seed: 42
+total_timesteps: 200000
+eval_interval: 10000
+log_interval: 1000
+checkpoint_path: checkpoints/rl/last.pt
+
+ckpt_root: checkpoints/rl
+run_name: null

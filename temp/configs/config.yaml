@@ -1,15 +1,13 @@
-# Main Hydra config
+
+# Main config: choose RL algorithm/env/network/training via defaults.
 defaults:
+  - common: default
+  - rl/agent: dqn
   - rl/env: cartpole
-  - rl/model: mlp_policy
-  - rl/optimizer: adam
-  - rl/training: reinforce
-  - common: logging
+  - rl/network: mlp_small
+  - rl/training: cartpole_fast
+  - rl/eval: default 
   - _self_
 
-hydra:
-  run:
-    dir: outputs/${now:%Y-%m-%d_%H-%M-%S}  # per-run folder
-
-seed: 42
-device: "cpu"  # or "cuda"
+# Top-level switch (rl or marl). For now we only use rl.
+mode: rl
