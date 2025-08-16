@@ -1,30 +1,27 @@
-# src/agentslab/networks/mlp.py
 from __future__ import annotations
 
-from typing import Iterable, List
+from typing import Iterable
 
 import torch
 import torch.nn as nn
 
 
 class MLP(nn.Module):
-    """Simple MLP with configurable hidden sizes."""
+    """Simple MLP builder used by both PG and DQN variants."""
 
-    def __init__(
-        self,
-        in_dim: int,
-        out_dim: int,
-        hidden_sizes: Iterable[int] = (128, 128),
-        activation: nn.Module = nn.ReLU,
-    ) -> None:
+    def __init__(self, in_dim: int, out_dim: int, hidden: Iterable[int], activation: nn.Module | None = None):
         super().__init__()
-        layers: List[nn.Module] = []
-        last = in_dim
-        for h in hidden_sizes:
-            layers += [nn.Linear(last, int(h)), activation()]
-            last = int(h)
-        layers.append(nn.Linear(last, out_dim))
+        layers: list[nn.Module] = []
+        prev = in_dim
+        for h in hidden:
+            layers += [nn.Linear(prev, h), nn.ReLU()]
+            prev = h
+        layers += [nn.Linear(prev, out_dim)]
         self.net = nn.Sequential(*layers)
+        self.activation = activation
 
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        return self.net(x)
+    def forward(self, x: torch.Tensor) -> torch.Tensor:  # type: ignore[override]
+        x = self.net(x)
+        if self.activation is not None:
+            x = self.activation(x)
+        return x

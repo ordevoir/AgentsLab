@@ -1,0 +1,8 @@
+name: pg
+network:
+  hidden_units: 64
+optimizer:
+  lr: 5e-3
+agent:
+  gamma: 0.99
+  grad_clip: null

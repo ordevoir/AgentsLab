@@ -79,14 +79,6 @@ def epsilon_greedy_policy(model, state, env, epsilon=0):
 
 # Trainer
 
-import torch.optim as optim
-optimizer = optim.Adam(online_net.parameters(), lr=LR, amsgrad=True,
-                       weight_decay=1e-5,
-                       )
-loss_fn = nn.SmoothL1Loss()
-memory = ReplayMemory(10000)
-
-
 BATCH_SIZE = 64
 GAMMA = 0.99
 ALPHA = 0.005
@@ -94,6 +86,13 @@ LR = 5e-4
 EPS_START = 0.9
 EPS_END = 0.05
 EPS_DECAY = 2000
+
+import torch.optim as optim
+optimizer = optim.Adam(online_net.parameters(), lr=LR, amsgrad=True,
+                       weight_decay=1e-5,
+                       )
+loss_fn = nn.SmoothL1Loss()
+memory = ReplayMemory(10000)
 
 def optimize_model(online_net, target_net, memory, loss_fn):
     if len(memory) < BATCH_SIZE:

@@ -157,7 +157,7 @@ def main():
     agent = Agent(net, AgentConfig(gamma=0.99, lr=0.005, grad_clip=None), device="cpu")
 
     # --- Hyperparams ---
-    episodes = 900
+    episodes = 600
     max_steps = 500
 
     # --- Train loop ---

@@ -68,7 +68,7 @@ n = env.action_space.n
 policy = Policy(m, n, n_units=16)
 
 gamma     = 0.99
-episodes  = 900
+episodes  = 600
 max_steps = 500
 
 learning_rate = 0.005
