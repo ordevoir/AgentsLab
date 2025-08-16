@@ -1,30 +1,13 @@
+
+# Main config: choose RL algorithm/env/network/training via defaults.
 defaults:
   - common: default
-  - env: cartpole
-  - rl/algo: pg
+  - rl/agent: dqn
+  - rl/env: cartpole
+  - rl/network: mlp_small
+  - rl/training: cartpole_fast
+  - rl/eval: default 
   - _self_
 
-mode: train  # train | eval
-
-eval:
-  checkpoint_path: null
-  episodes: 10
-  render: false
-
-logging:
-  tensorboard: true
-  stdout_interval: 1
-  tb_flush_secs: 10
-
-checkpointing:
-  save_last: true
-  save_best: true
-  metric: avg_reward
-  avg_window: 50
-  keep_every: 0
-
-hydra:
-  run:
-    dir: outputs/${now:%Y-%m-%d}/${now:%H-%M-%S}
-  sweep:
-    dir: multiruns/${now:%Y-%m-%d}/${now:%H-%M-%S}
+# Top-level switch (rl or marl). For now we only use rl.
+mode: rl

@@ -1,8 +1,0 @@
-
-name: reinforce
-# REINFORCE algorithm hyperparameters
-gamma: 0.99
-lr: 1e-3
-entropy_coef: 0.0
-normalize_returns: true
-clip_grad_norm: 10.0

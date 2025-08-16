@@ -1,32 +1,17 @@
-from __future__ import annotations
 
 import os
 import random
-from typing import Literal
-
+from typing import Optional
 import numpy as np
 import torch
 
-DevicePref = Literal["auto", "cpu", "cuda", "mps"]
-
-
-def select_device(pref: DevicePref = "auto") -> torch.device:
-    if pref == "cpu":
-        return torch.device("cpu")
-    if pref == "cuda" and torch.cuda.is_available():
-        return torch.device("cuda")
-    if pref == "mps" and torch.backends.mps.is_available():
-        return torch.device("mps")
-    if torch.cuda.is_available():
-        return torch.device("cuda")
-    if torch.backends.mps.is_available():
-        return torch.device("mps")
-    return torch.device("cpu")
-
-
-def set_seed(seed: int) -> None:
+def set_seed(seed: int, deterministic: bool = False) -> None:
     random.seed(seed)
     np.random.seed(seed)
     torch.manual_seed(seed)
     torch.cuda.manual_seed_all(seed)
-    os.environ["PYTHONHASHSEED"] = str(seed)
+    if deterministic:
+        torch.backends.cudnn.deterministic = True
+        torch.backends.cudnn.benchmark = False
+    else:
+        torch.backends.cudnn.benchmark = True

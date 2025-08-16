@@ -1,7 +1,4 @@
-seed: 42
-device: auto
 
-train:
-  episodes: 500
-  max_steps: 500
-  eval_interval: 0
+# Common settings
+project_name: AgentsLab
+deterministic_cudnn: false

@@ -1,27 +1,20 @@
-from __future__ import annotations
 
-from typing import Iterable
-
+from typing import Iterable, List
 import torch
 import torch.nn as nn
 
-
 class MLP(nn.Module):
-    """Simple MLP builder used by both PG and DQN variants."""
+    """Simple MLP for small discrete-control tasks."""
 
-    def __init__(self, in_dim: int, out_dim: int, hidden: Iterable[int], activation: nn.Module | None = None):
+    def __init__(self, input_dim: int, output_dim: int, hidden_sizes: Iterable[int]) -> None:
         super().__init__()
-        layers: list[nn.Module] = []
-        prev = in_dim
-        for h in hidden:
-            layers += [nn.Linear(prev, h), nn.ReLU()]
-            prev = h
-        layers += [nn.Linear(prev, out_dim)]
+        layers: List[nn.Module] = []
+        last = input_dim
+        for h in hidden_sizes:
+            layers += [nn.Linear(last, h), nn.ReLU()]
+            last = h
+        layers.append(nn.Linear(last, output_dim))
         self.net = nn.Sequential(*layers)
-        self.activation = activation
 
-    def forward(self, x: torch.Tensor) -> torch.Tensor:  # type: ignore[override]
-        x = self.net(x)
-        if self.activation is not None:
-            x = self.activation(x)
-        return x
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        return self.net(x)

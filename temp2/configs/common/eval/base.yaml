@@ -1,4 +1,0 @@
-# Evaluation settings
-episodes: 10
-checkpoint_path: checkpoints/rl/last.pt
-render_mode: null  # set to 'human' for on-screen rendering during eval

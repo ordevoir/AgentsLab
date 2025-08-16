@@ -1,124 +1,120 @@
+
 from __future__ import annotations
-
 from dataclasses import dataclass
-from itertools import count
-from typing import Optional, Tuple
-
-import gymnasium as gym
+from typing import Sequence, Tuple
+import numpy as np
 import torch
 import torch.nn as nn
 import torch.optim as optim
-from torch import Tensor, tensor
 
 from agentslab.networks.mlp import MLP
-from agentslab.rl.memory.replay_buffer import ReplayMemory, Transition
-from agentslab.utils.schedules import epsilon_by_frame
-
+from agentslab.core.replay_buffer import ReplayBuffer
 
 @dataclass
 class DQNConfig:
     gamma: float = 0.99
-    tau: float = 0.005  # soft target update
+    lr: float = 1e-3
     batch_size: int = 64
-    buffer_capacity: int = 10000
-    clip_grad_value: float = 5.0
-    lr: float = 5e-4
-    weight_decay: float = 1e-5
-    eps_start: float = 0.9
+    buffer_size: int = 100_000
+    start_learning_after: int = 1_000
+    target_update_every: int = 1_000
+    tau: float = 1.0  # 1.0 -> hard update; <1.0 -> soft update
+    eps_start: float = 1.0
     eps_end: float = 0.05
-    eps_decay_steps: int = 2000
-    hidden1: int = 128
-    hidden2: int = 64
+    eps_decay_steps: int = 50_000
+    huber_delta: float = 1.0
+    clip_grad_norm: float = 10.0
 
-
-class QNet(nn.Module):
-    def __init__(self, in_dim: int, act_dim: int, hidden1: int, hidden2: int) -> None:
+class QNetwork(nn.Module):
+    def __init__(self, input_dim: int, output_dim: int, hidden_sizes: Sequence[int]) -> None:
         super().__init__()
-        self.net = MLP(in_dim, act_dim, hidden=[hidden1, hidden2])
+        self.model = MLP(input_dim, output_dim, hidden_sizes)
 
-    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
-        return self.net(x)
-
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        return self.model(x)
 
 class DQNAgent:
-    def __init__(self, obs_dim: int, act_dim: int, cfg: DQNConfig, device: torch.device) -> None:
+    def __init__(
+        self,
+        obs_dim: int,
+        n_actions: int,
+        hidden_sizes: Sequence[int],
+        config: DQNConfig,
+        device: torch.device,
+    ) -> None:
         self.device = device
-        self.online = QNet(obs_dim, act_dim, cfg.hidden1, cfg.hidden2).to(device)
-        self.target = QNet(obs_dim, act_dim, cfg.hidden1, cfg.hidden2).to(device)
-        self.target.load_state_dict(self.online.state_dict())
+        self.cfg = config
+        self.q = QNetwork(obs_dim, n_actions, hidden_sizes).to(device)
+        self.q_target = QNetwork(obs_dim, n_actions, hidden_sizes).to(device)
+        self.q_target.load_state_dict(self.q.state_dict())
+        self.optim = optim.Adam(self.q.parameters(), lr=self.cfg.lr)
+        self.buffer = ReplayBuffer(self.cfg.buffer_size)
 
-        self.memory = ReplayMemory(cfg.buffer_capacity)
-        self.optimizer = optim.Adam(
-            self.online.parameters(), lr=cfg.lr, amsgrad=True, weight_decay=cfg.weight_decay
-        )
-        self.loss_fn = nn.SmoothL1Loss()
+        self.total_steps = 0
+        self.n_actions = n_actions
 
-        self.gamma = cfg.gamma
-        self.tau = cfg.tau
-        self.batch_size = cfg.batch_size
-        self.clip_grad_value = cfg.clip_grad_value
-
-        self.eps_start = cfg.eps_start
-        self.eps_end = cfg.eps_end
-        self.eps_decay_steps = cfg.eps_decay_steps
-        self.steps = 0
-
-    def select_action(self, state: Tensor, env: gym.Env) -> Tensor:
-        eps = epsilon_by_frame(self.steps, self.eps_start, self.eps_end, self.eps_decay_steps)
-        self.steps += 1
-        if torch.rand(1).item() > eps:
-            with torch.no_grad():
-                q_values = self.online(state)
-            action = q_values.max(dim=1).indices
-            return action.view(1, 1)
-        else:
-            a = env.action_space.sample()
-            return tensor([[a]], device=self.device, dtype=torch.long)
+    def epsilon(self) -> float:
+        if self.cfg.eps_decay_steps <= 0:
+            return self.cfg.eps_end
+        fraction = min(1.0, self.total_steps / self.cfg.eps_decay_steps)
+        return float(self.cfg.eps_start + fraction * (self.cfg.eps_end - self.cfg.eps_start))
 
     @torch.no_grad()
-    def _double_dqn_next_v(self, non_terminal_next_states: Tensor, mask: Tensor) -> Tensor:
-        # Action selection by online net, evaluation by target net
-        next_q_online = self.online(non_terminal_next_states)
-        next_q_target = self.target(non_terminal_next_states)
-        best_next_actions = next_q_online.max(1).indices.unsqueeze(1)
-        next_v = torch.zeros((self.batch_size, 1), device=self.device)
-        next_v[mask] = next_q_target.gather(1, best_next_actions)
-        return next_v
+    def act(self, obs: np.ndarray, exploit: bool = False) -> int:
+        eps = 0.0 if exploit else self.epsilon()
+        if np.random.rand() < eps:
+            return int(np.random.randint(self.n_actions))
+        obs_t = torch.as_tensor(obs, dtype=torch.float32, device=self.device).unsqueeze(0)
+        q_values = self.q(obs_t)
+        return int(torch.argmax(q_values, dim=-1).item())
 
-    def optimize(self) -> Optional[float]:
-        if len(self.memory) < self.batch_size:
-            return None
-        transitions = self.memory.sample(self.batch_size)
-        batch = Transition(*zip(*transitions))
+    def push(self, *transition) -> None:
+        self.buffer.push(*transition)
 
-        mask = tuple(map(lambda s: s is not None, batch.next_state))
-        mask_t = tensor(mask, device=self.device, dtype=torch.bool)
-        non_term_next_states = [s for s in batch.next_state if s is not None]
-        non_term_next_states = torch.cat(non_term_next_states) if non_term_next_states else None
-
-        state_batch = torch.cat(batch.state)
-        action_batch = torch.cat(batch.action)
-        reward_batch = torch.cat(batch.reward)
-
-        if non_term_next_states is not None:
-            next_v = self._double_dqn_next_v(non_term_next_states, mask_t)
+    def _soft_update(self) -> None:
+        if self.cfg.tau >= 1.0:
+            self.q_target.load_state_dict(self.q.state_dict())
         else:
-            next_v = torch.zeros((self.batch_size, 1), device=self.device)
+            with torch.no_grad():
+                for p, p_t in zip(self.q.parameters(), self.q_target.parameters()):
+                    p_t.mul_(1.0 - self.cfg.tau)
+                    p_t.add_(self.cfg.tau * p)
 
-        q_targets = reward_batch.unsqueeze(1) + self.gamma * next_v
+    def train_step(self) -> Tuple[float, float]:
+        if len(self.buffer) < max(self.cfg.batch_size, self.cfg.start_learning_after):
+            return 0.0, 0.0
 
-        q = self.online(state_batch)
-        q_selected = q.gather(dim=1, index=action_batch)
-        loss = self.loss_fn(q_selected, q_targets)
+        states, actions, next_states, rewards, dones = self.buffer.sample(self.cfg.batch_size)
+        states = states.to(self.device)
+        actions = actions.to(self.device)
+        next_states = next_states.to(self.device)
+        rewards = rewards.to(self.device)
+        dones = dones.to(self.device)
 
-        self.optimizer.zero_grad()
-        loss.backward()
-        torch.nn.utils.clip_grad_value_(self.online.parameters(), self.clip_grad_value)
-        self.optimizer.step()
+        # Q(s,a)
+        q_values = self.q(states).gather(1, actions)
 
-        # Soft target update
         with torch.no_grad():
-            for t_param, o_param in zip(self.target.parameters(), self.online.parameters()):
-                t_param.data.copy_(self.tau * o_param.data + (1.0 - self.tau) * t_param.data)
+            # Max over next actions from target network
+            next_q = self.q_target(next_states).max(1, keepdim=True).values
+            targets = rewards + (1.0 - dones) * self.cfg.gamma * next_q
 
-        return float(loss.item())
+        td_error = targets - q_values
+        # Huber loss
+        loss = torch.where(
+            td_error.abs() <= self.cfg.huber_delta,
+            0.5 * td_error.pow(2),
+            self.cfg.huber_delta * (td_error.abs() - 0.5 * self.cfg.huber_delta),
+        ).mean()
+
+        self.optim.zero_grad()
+        loss.backward()
+        if self.cfg.clip_grad_norm is not None and self.cfg.clip_grad_norm > 0:
+            torch.nn.utils.clip_grad_norm_(self.q.parameters(), self.cfg.clip_grad_norm)
+        self.optim.step()
+
+        self.total_steps += 1
+        if self.total_steps % self.cfg.target_update_every == 0:
+            self._soft_update()
+
+        return float(loss.item()), float(td_error.abs().mean().item())
