@@ -29,10 +29,3 @@ dependencies = [
 [tool.setuptools.packages.find]
 where = ["src"]
 include = ["agentslab*"]
-
-# CLI-комманды
-[project.scripts]
-marl-train = "marl_lab.scripts.train:main"
-marl-eval  = "marl_lab.scripts.evaluate:main"
-# После установки будут доступны команды marl-train и marl-eval
-
