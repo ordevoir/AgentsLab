@@ -1,5 +1,5 @@
-# torch>=2.7
-torchrl>=0.8,<0.10
+torch>=2.7
+torchrl<0.10,>=0.8
 tensordict>=0.5
 gymnasium==1.2.0
 pettingzoo>=1.25.0
@@ -8,3 +8,4 @@ mpe2
 numpy
 matplotlib
 tqdm
+tensorboard

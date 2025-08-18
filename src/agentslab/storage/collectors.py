@@ -1,12 +1,20 @@
 from __future__ import annotations
-from torchrl.collectors import SyncDataCollector
+from typing import Optional, Callable
 
-def make_sync_collector(create_env_fn, policy, frames_per_batch: int, total_frames: int, device=None, reset_at_each_iter=False):
+from torchrl.collectors import SyncDataCollector
+from torchrl.envs import EnvBase
+
+def make_sync_collector(
+    env: EnvBase,
+    policy,
+    frames_per_batch: int = 256,
+    init_random_frames: int = 1000,
+    total_frames: int = -1,
+):
     return SyncDataCollector(
-        create_env_fn=create_env_fn,
-        policy=policy,
+        env,
+        policy,
         frames_per_batch=frames_per_batch,
         total_frames=total_frames,
-        device=device,
-        reset_at_each_iter=reset_at_each_iter,
+        init_random_frames=init_random_frames,
     )

@@ -1,35 +1,66 @@
 from __future__ import annotations
+
+import math
+from typing import Iterable, List, Optional, Sequence, Tuple
+
+import torch
 import torch.nn as nn
-from torchrl.modules import MLP, MultiAgentMLP
+import torch.nn.functional as F
 
-def make_mlp(in_features: int, out_features: int, num_cells: int = 64, depth: int = 2, device=None) -> nn.Module:
-    return MLP(
-        in_features=in_features,
-        out_features=out_features,
-        depth=depth,
-        num_cells=[num_cells] * depth,
-        activation_class=nn.ReLU,
-        device=device,
-    )
+class MLP(nn.Module):
+    def __init__(
+        self,
+        in_features: int,
+        out_features: int,
+        hidden_layers: Sequence[int] = (256, 256),
+        activation: Callable[..., nn.Module] | None = nn.ReLU,
+        layer_norm: bool = False,
+    ) -> None:
+        super().__init__()
+        layers: List[nn.Module] = []
+        last = in_features
+        for h in hidden_layers:
+            layers += [nn.Linear(last, h)]
+            if layer_norm:
+                layers += [nn.LayerNorm(h)]
+            if activation is not None:
+                layers += [activation()]
+            last = h
+        layers += [nn.Linear(last, out_features)]
+        self.net = nn.Sequential(*layers)
 
-def make_multiagent_mlp(
-    obs_dim_per_agent: int,
-    out_dim_per_agent: int,
-    n_agents: int,
-    depth: int = 2,
-    num_cells: int = 256,
-    device=None,
-    centralized: bool = False,
-    share_params: bool = True,
-):
-    return MultiAgentMLP(
-        n_agent_inputs=obs_dim_per_agent,
-        n_agent_outputs=out_dim_per_agent,
-        n_agents=n_agents,
-        centralised=centralized,
-        share_params=share_params,
-        depth=depth,
-        num_cells=num_cells,
-        activation_class=nn.Tanh,
-        device=device,
-    )
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        return self.net(x)
+
+class CNNAtariDQN(nn.Module):
+    """Classic DQN convolutional torso for pixel observations (CHW)."""
+    def __init__(self, in_channels: int, n_actions: int):
+        super().__init__()
+        self.conv = nn.Sequential(
+            nn.Conv2d(in_channels, 32, kernel_size=8, stride=4),
+            nn.ReLU(),
+            nn.Conv2d(32, 64, kernel_size=4, stride=2),
+            nn.ReLU(),
+            nn.Conv2d(64, 64, kernel_size=3, stride=1),
+            nn.ReLU(),
+        )
+        # compute output size lazily
+        self.head = None
+        self._n_actions = n_actions
+
+    def _ensure_head(self, x: torch.Tensor):
+        if self.head is None:
+            with torch.no_grad():
+                y = self.conv(x)
+                flat = y.view(y.size(0), -1).size(1)
+            self.head = nn.Sequential(
+                nn.Flatten(),
+                nn.Linear(flat, 512),
+                nn.ReLU(),
+                nn.Linear(512, self._n_actions),
+            )
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        self._ensure_head(x)
+        y = self.conv(x)
+        return self.head(y)

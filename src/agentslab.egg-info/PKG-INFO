@@ -1,0 +1,33 @@
+Metadata-Version: 2.4
+Name: agentslab
+Version: 0.1.0
+Summary: Research lab scaffolding for single-agent and multi-agent RL with TorchRL
+Author: Ordevoir
+License: MIT
+Requires-Python: >=3.10
+Description-Content-Type: text/markdown
+Requires-Dist: torch>=2.7
+Requires-Dist: torchrl<0.10,>=0.8
+Requires-Dist: tensordict>=0.5
+Requires-Dist: gymnasium==1.2.0
+Requires-Dist: pettingzoo>=1.25.0
+Requires-Dist: vmas>=1.5.0
+Requires-Dist: mpe2
+Requires-Dist: numpy
+Requires-Dist: matplotlib
+Requires-Dist: tqdm
+Requires-Dist: tensorboard
+
+# agentslab
+
+Лаборатория для экспериментов с RL и MARL на базе TorchRL.
+- Поддержаны Gymnasium, PettingZoo/MPE2 и VMAS.
+- Примеры: DQN (одноагентный), PPO (мультиагентный, VMAS).
+
+## Установка
+```bash
+pip install -e . -r requirements.txt
+```
+
+## Быстрый старт (из блокнота)
+См. `notebooks/DQN_CartPole.ipynb` и `notebooks/MARL_VMAS_PPO.ipynb`.

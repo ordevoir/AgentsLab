@@ -1,163 +1,132 @@
 from __future__ import annotations
-from dataclasses import dataclass
-import torch
-from torch.optim import Adam
-from tensordict.nn import set_composite_lp_aggregate
-from torchrl.objectives import DQNLoss, ClipPPOLoss, ValueEstimators, SoftUpdate
-from torchrl.envs import TransformedEnv, RewardSum
 
-from agentslab.storage.collectors import make_sync_collector
-from agentslab.storage.buffers import make_replay_buffer_dqn, make_replay_buffer_ppo
-from agentslab.runner.logger import LabLogger
-from agentslab.runner.checkpointer import Checkpointer, default_run_name
+import os
+from dataclasses import dataclass
+from typing import Optional, Dict, Any
+
+import torch
+from tqdm.auto import tqdm
+from tensordict import TensorDict
+from tensordict.nn import TensorDictModule as Mod, TensorDictSequential as Seq
+
+from torch.optim import Adam
+from torchrl.objectives import DQNLoss, SoftUpdate
+from torchrl._utils import logger as torchrl_logger
+
+from ..envs.gym import make_gym_env
+from ..models.value import build_qvalue_actor
+from ..models.policy import build_dqn_policy
+from ..storage.buffers import make_replay_buffer
+from ..storage.collectors import make_sync_collector
+from .logger import prepare_logging, log_metrics
+from .checkpointer import prepare_checkpoint_dir, save_checkpoint
 
 @dataclass
 class DQNConfig:
-    frames_per_batch: int = 32
-    total_frames: int = 20_000
-    rb_max_size: int = 50_000
-    batch_size: int = 32
-    gamma: float = 0.99
+    env_id: str = "CartPole-v1"
+    seed: int = 0
+    frames_per_batch: int = 256
+    init_random_frames: int = 1_000
+    optim_steps_per_batch: int = 1
+    total_frames: int = 50_000
+    buffer_size: int = 100_000
+    batch_size: int = 128
     lr: float = 1e-3
-    tau: float = 0.01
-    eps_init: float = 1.0
-    eps_end: float = 0.01
-    eps_anneal: int = 5_000
-
-def train_dqn(
-    create_env_fn,
-    q_net,
-    action_spec,
-    device,
-    log_dir: str,
-    ckpt_dir: str,
-    env_name: str,
-    seed: int | None = None,
-    cfg: DQNConfig = DQNConfig(),
-):
-    from agentslab.models.policy import build_dqn_policy
-    policy = build_dqn_policy(q_net, action_spec, cfg.eps_init, cfg.eps_end, cfg.eps_anneal)
-
-    collector = make_sync_collector(create_env_fn, policy, cfg.frames_per_batch, cfg.total_frames, device=device)
-    rb = make_replay_buffer_dqn(cfg.rb_max_size, cfg.batch_size, device=device)
-    loss_module = DQNLoss(value_network=policy[0], loss_function="l2", delay_value=True)
-    loss_module.make_value_estimator(gamma=cfg.gamma)
-    target_updater = SoftUpdate(loss_module, tau=cfg.tau)
-    optimizer = Adam(q_net.parameters(), lr=cfg.lr)
-
-    run_name = default_run_name("dqn", env_name, seed)
-    logger = LabLogger(log_dir, run_name)
-    checkpointer = Checkpointer(ckpt_dir, run_name)
-
-    step = 0
-    try:
-        for i, data in enumerate(collector):
-            rb.extend(data)
-            policy[1].step(data.numel())
-            if len(rb) >= cfg.batch_size:
-                batch = rb.sample().to(device)
-                loss = loss_module(batch)["loss"]
-                optimizer.zero_grad(set_to_none=True)
-                loss.backward()
-                optimizer.step()
-                target_updater.step()
-                logger.log_scalar(step, "loss", float(loss.detach().cpu()))
-            step += 1
-    finally:
-        collector.shutdown()
-    checkpointer.save(policy=policy, q_net=q_net, optimizer=optimizer, loss=loss_module)
-    logger.close()
-    return run_name
-
-@dataclass
-class PPOConfig:
-    frames_per_batch: int = 6_000
-    n_iters: int = 5
-    num_epochs: int = 30
-    minibatch_size: int = 400
-    lr: float = 3e-4
-    max_grad_norm: float = 1.0
-    clip_epsilon: float = 0.2
     gamma: float = 0.99
-    lmbda: float = 0.9
-    entropy_eps: float = 1e-4
+    tau: float = 0.995  # for SoftUpdate
+    epsilon_steps: int = 100_000
+    eps_init: float = 1.0
+    eps_end: float = 0.05
+    max_steps: Optional[int] = None
+    log_root: str = "logs"
+    ckpt_root: str = "checkpoints"
+    run_name: str = "dqn"
 
-def train_marl_ppo(
-    env,
-    policy,
-    critic_value_net,
-    device,
-    log_dir: str,
-    ckpt_dir: str,
-    env_name: str,
-    seed: int | None = None,
-    cfg: PPOConfig = PPOConfig(),
-):
-    set_composite_lp_aggregate(False).set()
+def train_dqn(config: DQNConfig, device: torch.device, record_video: bool=False) -> Dict[str, Any]:
+    # Logging / checkpoints
+    logs = prepare_logging(config.log_root, config.run_name, with_tensorboard=True, video=record_video)
+    ckpt = prepare_checkpoint_dir(config.ckpt_root, config.run_name)
 
-    rb = make_replay_buffer_ppo(cfg.frames_per_batch, cfg.minibatch_size)
-    try:
-        env = TransformedEnv(env, RewardSum(reward_key=env.reward_key))
-    except Exception:
-        pass
-    collector = make_sync_collector(lambda: env, policy, cfg.frames_per_batch, cfg.frames_per_batch * cfg.n_iters, device=device)
+    # Env
+    env = make_gym_env(config.env_id, seed=config.seed, record_video=False, max_steps=config.max_steps)
+    env.set_seed(config.seed)
+    # Specs
+    # Action-space size
+    n_actions = getattr(getattr(env.action_spec, 'space', None), 'n', None)
+    if n_actions is None:
+        n_actions = env.action_spec.shape[-1]
 
-    loss_module = ClipPPOLoss(
-        actor_network=policy,
-        critic_network=critic_value_net,
-        clip_epsilon=cfg.clip_epsilon,
-        entropy_coef=cfg.entropy_eps,
-        critic_coef=1.0,
-        normalize_advantage=False,   # как в туториале TorchRL для MARL
-    )
+    # Policy / value
+    value_net, q_head = build_qvalue_actor(n_actions, hidden=(256,256))
+    greedy, explore = build_dqn_policy(value_net, q_head, action_spec=env.action_spec,
+                                       epsilon_steps=config.epsilon_steps, eps_init=config.eps_init, eps_end=config.eps_end)
+    value_net.to(device)
+    greedy.to(device)
+    explore.to(device)
 
-    loss_module.set_keys(
-        action=env.action_key,
-        reward=env.reward_key,
-        value=("agents", "state_value"),   # критик пишет сюда
-        # sample_log_prob оставляем по умолчанию: "sample_log_prob"
-        # advantage / value_target тоже оставляем по умолчанию:
-        # "advantage" и "value_target"
-    )
+    # Collector / Replay
+    collector = make_sync_collector(env, explore,
+                                    frames_per_batch=config.frames_per_batch,
+                                    init_random_frames=config.init_random_frames,
+                                    total_frames=config.total_frames)
+    rb = make_replay_buffer(config.buffer_size, prioritized=False)
 
-    loss_module.make_value_estimator(
-        ValueEstimators.GAE, gamma=cfg.gamma, lmbda=cfg.lmbda
-    )
+    # Loss + Optim + Target updater
+    loss_module = DQNLoss(value_network=greedy, action_space=env.action_spec, gamma=config.gamma,
+                          delay_value=True, double_dqn=True)
+    optimizer = Adam(loss_module.parameters(), lr=config.lr)
+    target_updater = SoftUpdate(loss_module, eps=config.tau)
 
-    optimizer = Adam(loss_module.parameters(), lr=cfg.lr)
+    pbar = tqdm(total=config.total_frames, desc="Training", unit="frame")
+    frames = 0
+    episodes = 0
+    best_eval = float("-inf")
 
-    run_name = default_run_name("mappo", env_name, seed)
-    logger = LabLogger(log_dir, run_name)
-    checkpointer = Checkpointer(ckpt_dir, run_name)
+    for batch in collector:
+        # batch: TensorDict with [time, env, ...]
+        # Push to replay
+        rb.extend(batch)
 
-    episode_reward_means = []
+        # Optimization steps
+        for _ in range(config.optim_steps_per_batch):
+            if len(rb) < config.batch_size:
+                break
+            td = rb.sample(config.batch_size).to(device)
+            loss_td = loss_module(td)
+            loss = loss_td["loss"]
 
-    for it, tensordict_data in enumerate(collector):
-        with torch.no_grad():
-            loss_module.value_estimator(
-                tensordict_data,
-                params=loss_module.critic_network_params,
-                target_params=loss_module.target_critic_network_params,
-            )
-        rb.extend(tensordict_data)
+            optimizer.zero_grad(set_to_none=True)
+            loss.backward()
+            optimizer.step()
+            target_updater.step()
 
-        for _ in range(cfg.num_epochs):
-            for batch in rb:
-                loss_vals = loss_module(batch)
-                loss = loss_vals["loss_objective"] + loss_vals["loss_critic"] + loss_vals["loss_entropy"]
-                optimizer.zero_grad(set_to_none=True)
-                loss.backward()
-                torch.nn.utils.clip_grad_norm_(loss_module.parameters(), cfg.max_grad_norm)
-                optimizer.step()
+        # Metrics
+        frames += batch.numel()
+        info = {
+            "loss": float(loss.detach().cpu()) if 'loss' in locals() else float('nan'),
+            "frames": frames,
+            "episodes": episodes,
+            "epsilon": float(explore[-1].eps.item()) if hasattr(explore[-1], "eps") else float('nan'),
+        }
+        log_metrics(logs, info, step=frames)
+        pbar.set_postfix(loss=info["loss"], eps=info["epsilon"])
+        pbar.update(batch.numel())
 
-        if ("next", "episode_reward") in tensordict_data.keys(True, True):
-            ep_rew = tensordict_data.get(("next", "episode_reward"))
-            rew_mean = float(ep_rew.mean().cpu())
-            episode_reward_means.append(rew_mean)
-            logger.log_scalar(it, "episode_reward_mean", rew_mean)
+        # stop condition
+        if 0 < config.total_frames <= frames:
+            break
 
-        rb.clear()
+    pbar.close()
+    collector.shutdown()
+    env.close()
 
-    checkpointer.save(policy=policy, optimizer=optimizer, loss=loss_module)
-    logger.close()
-    return run_name, episode_reward_means
+    # Save checkpoint
+    state = {
+        "value_net": value_net.state_dict(),
+        "loss_module": loss_module.state_dict(),
+        "optimizer": optimizer.state_dict(),
+        "config": vars(config),
+        "frames": frames,
+    }
+    path = save_checkpoint(ckpt, f"{config.env_id}_DQN_seed{config.seed}_frames{frames}.pt", state)
+    return {"log_dir": logs.log_dir, "ckpt_path": path}

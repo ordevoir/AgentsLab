@@ -1,18 +1,27 @@
 from __future__ import annotations
+from typing import Any
 from tensordict import TensorDictBase
+from torchrl.envs import EnvBase
 
-def pretty_specs(env) -> str:
-    parts = []
-    parts.append(f"Batch size: {getattr(env, 'batch_size', None)}")
+def describe_env(env: EnvBase) -> str:
+    s = []
+    s.append(f"Env: {getattr(env, 'name', type(env).__name__)}")
     try:
-        parts.append(f"Observation spec: {env.observation_spec}")
-    except Exception as e:
-        parts.append(f"Observation spec: <error {e}>")
+        s.append(f"Observation spec: {env.observation_spec}")
+    except Exception:
+        pass
     try:
-        parts.append(f"Action spec: {env.action_spec}")
-    except Exception as e:
-        parts.append(f"Action spec: <error {e}>")
-    return "\n".join(parts)
+        s.append(f"Action spec: {env.action_spec}")
+    except Exception:
+        pass
+    try:
+        s.append(f"Reward spec: {env.reward_spec}")
+    except Exception:
+        pass
+    return "\n".join(s)
 
-def td_summary(td: TensorDictBase) -> str:
-    return str(td)
+def safe_td_get(td: TensorDictBase, key: str, default: Any=None):
+    try:
+        return td.get(key)
+    except Exception:
+        return default

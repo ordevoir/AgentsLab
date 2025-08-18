@@ -1,12 +1,23 @@
+from __future__ import annotations
+from typing import Optional
 import torch
 
-def select_device(prefer: str | int | None = None) -> torch.device:
-    if isinstance(prefer, int):
-        if torch.cuda.is_available():
-            return torch.device(prefer)
-    if prefer in {"cuda", "gpu"} and torch.cuda.is_available():
-        return torch.device("cuda:0")
+def get_device(preferred: Optional[str] = None) -> torch.device:
+    """Resolve device, giving priority to `preferred` when available.
+    Example: get_device("cuda"), get_device("mps"), get_device("cpu")
+    """
+    if preferred is not None:
+        try:
+            dev = torch.device(preferred)
+            if dev.type == "cuda" and not torch.cuda.is_available():
+                raise RuntimeError("CUDA not available")
+            if dev.type == "mps" and not torch.backends.mps.is_available():
+                raise RuntimeError("MPS not available")
+            return dev
+        except Exception:
+            pass
+    if torch.cuda.is_available():
+        return torch.device("cuda")
+    if getattr(torch.backends, "mps", None) and torch.backends.mps.is_available():
+        return torch.device("mps")
     return torch.device("cpu")
-
-def split_devices(policy_device: torch.device, sim_device: torch.device | None = None):
-    return policy_device, (sim_device or policy_device)

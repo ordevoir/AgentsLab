@@ -1,31 +1,38 @@
 from __future__ import annotations
-import os, time, uuid, torch
-from pathlib import Path
+import os, time, json
+from dataclasses import dataclass
+from typing import Optional, Dict, Any
 
-def default_run_name(alg: str, env_name: str, seed: int | None = None) -> str:
-    ts = time.strftime("%Y%m%d-%H%M%S")
-    uid = uuid.uuid4().hex[:6]
-    seed_txt = f"s{seed}" if seed is not None else "sNA"
-    safe_env = env_name.replace("/", "-")
-    return f"{ts}_{alg}_{safe_env}_{seed_txt}_{uid}"
+import torch
 
-class Checkpointer:
-    def __init__(self, base_dir: str | os.PathLike, run_name: str):
-        self.base = Path(base_dir) / run_name
-        self.base.mkdir(parents=True, exist_ok=True)
+@dataclass
+class CheckpointPaths:
+    root: str
+    run_name: str
+    timestamp: str
+    dir: str
 
-    def save(self, **state_objs):
-        for name, obj in state_objs.items():
-            path = self.base / f"{name}.pt"
-            if hasattr(obj, "state_dict"):
-                torch.save(obj.state_dict(), path)
-            else:
-                torch.save(obj, obj)
-        return self.base
+def _timestamp() -> str:
+    return time.strftime("%Y%m%d-%H%M%S", time.localtime())
 
-    def load_into(self, **targets):
-        for name, target in targets.items():
-            path = self.base / f"{name}.pt"
-            if path.exists():
-                sd = torch.load(path, map_location="cpu")
-                target.load_state_dict(sd)
+def prepare_checkpoint_dir(root: str, run_name: str) -> CheckpointPaths:
+    ts = _timestamp()
+    d = os.path.join(root, run_name, ts)
+    os.makedirs(d, exist_ok=True)
+    return CheckpointPaths(root=root, run_name=run_name, timestamp=ts, dir=d)
+
+def save_checkpoint(chk: CheckpointPaths, filename: str, state: Dict[str, Any]) -> str:
+    path = os.path.join(chk.dir, filename)
+    torch.save(state, path)
+    # also write a small JSON index for quick inspection
+    meta = {k: v for k, v in state.items() if isinstance(v, (int, float, str))}
+    with open(path + ".meta.json", "w") as f:
+        json.dump(meta, f, indent=2)
+    return path
+
+def latest_run_dir(root: str, run_name: str) -> Optional[str]:
+    base = os.path.join(root, run_name)
+    if not os.path.isdir(base):
+        return None
+    runs = sorted(os.listdir(base))
+    return os.path.join(base, runs[-1]) if runs else None
