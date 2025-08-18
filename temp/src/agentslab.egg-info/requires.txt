@@ -1,0 +1,9 @@
+torchrl<0.10,>=0.8
+tensordict>=0.5
+gymnasium==1.2.0
+pettingzoo>=1.25.0
+vmas>=1.5.0
+mpe2
+numpy
+matplotlib
+tqdm

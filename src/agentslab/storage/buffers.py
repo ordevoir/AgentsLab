@@ -1,12 +1,12 @@
-from __future__ import annotations
-from torchrl.data import TensorDictReplayBuffer, LazyMemmapStorage
+from dataclasses import dataclass
+from torchrl.data import ReplayBuffer, LazyTensorStorage, SamplerWithoutReplacement
 
-def make_replay_buffer(size: int, batch_size: int, prefetch: int = 1, pin_memory: bool = True):
-    storage = LazyMemmapStorage(size)
-    rb = TensorDictReplayBuffer(
-        storage=storage,
-        batch_size=batch_size,
-        prefetch=prefetch,
-        pin_memory=pin_memory,
+@dataclass
+class BufferConfig:
+    frames_per_batch: int
+
+def build_onpolicy_buffer(cfg: BufferConfig) -> ReplayBuffer:
+    return ReplayBuffer(
+        storage=LazyTensorStorage(max_size=cfg.frames_per_batch),
+        sampler=SamplerWithoutReplacement()
     )
-    return rb

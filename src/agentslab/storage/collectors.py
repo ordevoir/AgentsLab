@@ -1,15 +1,21 @@
-from __future__ import annotations
+from dataclasses import dataclass
+from typing import Optional, Union
+import torch
 from torchrl.collectors import SyncDataCollector
 
-def make_sync_collector(create_env_fn, policy, frames_per_batch: int, total_frames: int,
-                        init_random_frames: int, reset_at_each_iter: bool, device):
-    collector = SyncDataCollector(
-        create_env_fn=create_env_fn,
-        policy=policy,
-        frames_per_batch=frames_per_batch,
-        total_frames=total_frames,
-        init_random_frames=init_random_frames,
-        reset_at_each_iter=reset_at_each_iter,
-        device=device,
+@dataclass
+class CollectorConfig:
+    frames_per_batch: int = 2048
+    total_frames: int = 1_000_000
+    split_trajs: bool = False
+    device: Union[str, torch.device] = "cpu"
+
+def build_sync_collector(cfg: CollectorConfig, env, policy):
+    return SyncDataCollector(
+        env,
+        policy,
+        frames_per_batch=cfg.frames_per_batch,
+        total_frames=cfg.total_frames,
+        split_trajs=cfg.split_trajs,
+        device=cfg.device,
     )
-    return collector
