@@ -1,14 +1,15 @@
 from __future__ import annotations
-from typing import Sequence
+from torchrl.objectives import DQNLoss, SoftUpdate
 
-from tensordict.nn import TensorDictModule as Mod
-from torchrl.modules import MLP, QValueModule
+def make_dqn_loss(qvalue_actor, gamma: float, double_dqn: bool, delay_value: bool, loss_function: str):
+    loss = DQNLoss(
+        value_network=qvalue_actor,
+        loss_function=loss_function,
+        delay_value=delay_value,
+        double_dqn=double_dqn,
+    )
+    loss.make_value_estimator(gamma=gamma)
+    return loss
 
-def build_qvalue_actor(n_actions: int, hidden: Sequence[int]=(256,256)):
-    """Return a TensorDictModule computing action-values and a QValueModule head.
-    Uses TorchRL's MLP with implicit input-size inference.
-    """
-    value_mlp = MLP(out_features=n_actions, num_cells=list(hidden))
-    value_net = Mod(value_mlp, in_keys=["observation"], out_keys=["action_value"])
-    q_head = QValueModule(spec=None)  # spec set later if available
-    return value_net, q_head
+def make_soft_updater(loss_module, tau: float):
+    return SoftUpdate(loss_module, tau=tau)

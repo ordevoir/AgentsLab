@@ -1,38 +1,42 @@
 from __future__ import annotations
-import os, time, json
-from dataclasses import dataclass
-from typing import Optional, Dict, Any
+import os, time, torch
 
-import torch
+class Checkpointer:
+    def __init__(self, base_dir: str):
+        self.base_dir = base_dir
+        os.makedirs(self.base_dir, exist_ok=True)
 
-@dataclass
-class CheckpointPaths:
-    root: str
-    run_name: str
-    timestamp: str
-    dir: str
+    def save(self, *, step: int, policy, q_net, optimizer, loss_module, extra: dict | None = None) -> str:
+        name = f"ckpt_step{step:08d}.pt"
+        path = os.path.join(self.base_dir, name)
+        payload = {
+            "step": step,
+            "q_net": q_net.state_dict(),
+            "optimizer": optimizer.state_dict(),
+            "loss_module": loss_module.state_dict(),
+            "policy_eps": getattr(policy[-1], "eps", None),
+            "extra": extra or {},
+            "ts": time.time(),
+        }
+        torch.save(payload, path)
+        return path
 
-def _timestamp() -> str:
-    return time.strftime("%Y%m%d-%H%M%S", time.localtime())
+    def latest(self) -> str | None:
+        files = [f for f in os.listdir(self.base_dir) if f.startswith("ckpt_step") and f.endswith(".pt")]
+        if not files:
+            return None
+        files.sort()
+        return os.path.join(self.base_dir, files[-1])
 
-def prepare_checkpoint_dir(root: str, run_name: str) -> CheckpointPaths:
-    ts = _timestamp()
-    d = os.path.join(root, run_name, ts)
-    os.makedirs(d, exist_ok=True)
-    return CheckpointPaths(root=root, run_name=run_name, timestamp=ts, dir=d)
-
-def save_checkpoint(chk: CheckpointPaths, filename: str, state: Dict[str, Any]) -> str:
-    path = os.path.join(chk.dir, filename)
-    torch.save(state, path)
-    # also write a small JSON index for quick inspection
-    meta = {k: v for k, v in state.items() if isinstance(v, (int, float, str))}
-    with open(path + ".meta.json", "w") as f:
-        json.dump(meta, f, indent=2)
-    return path
-
-def latest_run_dir(root: str, run_name: str) -> Optional[str]:
-    base = os.path.join(root, run_name)
-    if not os.path.isdir(base):
-        return None
-    runs = sorted(os.listdir(base))
-    return os.path.join(base, runs[-1]) if runs else None
+    @staticmethod
+    def load_into(path: str, *, policy, q_net, optimizer, loss_module, map_location=None):
+        data = torch.load(path, map_location=map_location)
+        q_net.load_state_dict(data["q_net"])
+        optimizer.load_state_dict(data["optimizer"])
+        loss_module.load_state_dict(data["loss_module"])
+        if data.get("policy_eps") is not None:
+            try:
+                policy[-1].eps = data["policy_eps"]
+            except Exception:
+                pass
+        return data

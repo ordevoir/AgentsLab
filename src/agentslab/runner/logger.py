@@ -1,35 +1,23 @@
 from __future__ import annotations
-import os
-import time
-from dataclasses import dataclass
-from typing import Optional, Dict, Any
+import csv, os
 
-from torchrl.record.loggers import CSVLogger, TensorboardLogger
-from torchrl.record import VideoRecorder
+class CSVLogger:
+    def __init__(self, filepath: str, fieldnames: list[str]):
+        os.makedirs(os.path.dirname(filepath), exist_ok=True)
+        self.filepath = filepath
+        self.fieldnames = fieldnames
+        self._file = open(filepath, "w", newline="", encoding="utf-8")
+        self._writer = csv.DictWriter(self._file, fieldnames=fieldnames)
+        self._writer.writeheader()
+        self._file.flush()
 
-@dataclass
-class LogSetup:
-    log_dir: str
-    run_name: str
-    csv: CSVLogger
-    tb: Optional[TensorboardLogger]
-    video_recorder: Optional[VideoRecorder]
+    def log(self, **kwargs) -> None:
+        row = {k: kwargs.get(k) for k in self.fieldnames}
+        self._writer.writerow(row)
+        self._file.flush()
 
-def _timestamp() -> str:
-    return time.strftime("%Y%m%d-%H%M%S", time.localtime())
-
-def prepare_logging(root: str, run_name: str, with_tensorboard: bool = True, video: bool=False) -> LogSetup:
-    # create unique dir: logs/run_name/<timestamp>
-    ts = _timestamp()
-    log_dir = os.path.join(root, run_name, ts)
-    os.makedirs(log_dir, exist_ok=True)
-    csv = CSVLogger(exp_name=run_name, log_dir=log_dir)
-    tb = TensorboardLogger(exp_name=run_name, log_dir=log_dir) if with_tensorboard else None
-    vr = VideoRecorder(log_dir, tag="eval") if video else None
-    return LogSetup(log_dir=log_dir, run_name=run_name, csv=csv, tb=tb, video_recorder=vr)
-
-def log_metrics(loggers: LogSetup, metrics: Dict[str, Any], step: int | None = None):
-    # CSV always
-    loggers.csv.log_dict(metrics, step)
-    if loggers.tb is not None:
-        loggers.tb.log_dict(metrics, step)
+    def close(self):
+        try:
+            self._file.close()
+        except Exception:
+            pass
