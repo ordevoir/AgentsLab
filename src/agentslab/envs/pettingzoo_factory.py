@@ -1,24 +1,28 @@
 from dataclasses import dataclass
-from typing import Optional, Union
 import torch
-
-try:
-    from torchrl.envs.libs.pettingzoo import PettingZooEnv
-except Exception as e:
-    PettingZooEnv = None  # type: ignore
+from torchrl.envs.libs.pettingzoo import PettingZooEnv
+from torchrl.envs import TransformedEnv
+from torchrl.envs.transforms import RewardSum, Compose
 
 @dataclass
 class PettingZooConfig:
-    env_maker: callable  # lambda returning a PettingZoo env instance
+    domain: str = "mpe"
+    task: str = "simple_v2"  # e.g., simple_v2
     parallel: bool = True
-    use_mask: bool = True
-    device: Union[str, torch.device] = "cpu"
-    seed: Optional[int] = 0
+    device: torch.device | str = "cpu"
+    use_action_mask: bool = False
+    sum_reward: bool = True
 
 def make_pettingzoo_env(cfg: PettingZooConfig):
-    if PettingZooEnv is None:
-        raise ImportError("torchrl PettingZooEnv wrapper not available. Install pettingzoo and torchrl extras.")
-    env = PettingZooEnv(cfg.env_maker, parallel=cfg.parallel, use_mask=cfg.use_mask, device=cfg.device)
-    if cfg.seed is not None:
-        env.set_seed(cfg.seed)
+    import pettingzoo
+    if cfg.parallel:
+        env = getattr(getattr(pettingzoo, cfg.domain), cfg.task).parallel_env()
+    else:
+        env = getattr(getattr(pettingzoo, cfg.domain), cfg.task).env()
+    env = PettingZooEnv(env, use_mask=cfg.use_action_mask, device=cfg.device)
+    transforms = []
+    if cfg.sum_reward:
+        transforms.append(RewardSum(in_keys=[("agents","reward")], out_keys=[("agents","episode_reward")]))
+    if transforms:
+        env = TransformedEnv(env, Compose(*transforms))
     return env

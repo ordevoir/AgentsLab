@@ -7,7 +7,7 @@ from tensordict.nn import TensorDictModule
 from torchrl.modules import ProbabilisticActor, TanhNormal
 from tensordict.nn.distributions import NormalParamExtractor
 
-from .networks import build_mlp, MLPConfig
+from agentslab.modules.networks import build_mlp, MLPConfig
 
 @dataclass
 class StochasticPolicyConfig:

@@ -1,6 +1,14 @@
 import torch
 
-def pick_device(preferred: str | torch.device = "cuda"):
-    if isinstance(preferred, str) and preferred.lower() == "cuda":
-        return torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    return torch.device(preferred)
+def resolve_device(preferred: str | torch.device = "cuda"):
+
+    if preferred.lower() == "cuda":
+        if torch.cuda.is_available():
+            return torch.device(preferred)
+        else:
+            print("warning: cuda is not abvailable! cpu is using")
+            return torch.device("cpu")
+    if preferred.lower() == "cpu":
+        return torch.device("cpu")
+    else:
+        raise ValueError('Select "cuda" or "cpu"!')
