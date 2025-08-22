@@ -1,0 +1,10 @@
+[2025-08-22 20:22:58,569] INFO: step=1000 loss/objective=-0.166676, loss/critic=17.791883, loss/entropy=-0.000059, reward/avg=9.086821, lr=0.000293
+[2025-08-22 20:23:02,887] INFO: step=2000 loss/objective=0.032535, loss/critic=10.972418, loss/entropy=-0.000038, reward/avg=9.110282, lr=0.000271
+[2025-08-22 20:23:07,298] INFO: step=3000 loss/objective=-0.070873, loss/critic=10.303009, loss/entropy=-0.000034, reward/avg=9.137185, lr=0.000238
+[2025-08-22 20:23:11,774] INFO: step=4000 loss/objective=-0.247190, loss/critic=19.169777, loss/entropy=-0.000029, reward/avg=9.184678, lr=0.000196
+[2025-08-22 20:23:16,963] INFO: step=5000 loss/objective=0.028607, loss/critic=15.724553, loss/entropy=-0.000025, reward/avg=9.201195, lr=0.000150
+[2025-08-22 20:23:40,427] INFO: step=1000 loss/objective=0.111946, loss/critic=17.578627, loss/entropy=0.000006, reward/avg=9.220726, lr=0.000104
+[2025-08-22 20:23:44,586] INFO: step=2000 loss/objective=-0.085887, loss/critic=25.136192, loss/entropy=-0.000002, reward/avg=9.235211, lr=0.000062
+[2025-08-22 20:23:49,002] INFO: step=3000 loss/objective=0.049468, loss/critic=21.686182, loss/entropy=0.000024, reward/avg=9.239565, lr=0.000029
+[2025-08-22 20:23:53,170] INFO: step=4000 loss/objective=0.015150, loss/critic=26.881895, loss/entropy=0.000004, reward/avg=9.248111, lr=0.000007
+[2025-08-22 20:23:57,212] INFO: step=5000 loss/objective=-0.069492, loss/critic=27.632372, loss/entropy=0.000006, reward/avg=9.239759, lr=0.000000

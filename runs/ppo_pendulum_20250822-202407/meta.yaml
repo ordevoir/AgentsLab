@@ -1,0 +1,15 @@
+run_name: ppo_pendulum_20250822-202407
+algo: ppo
+env: pendulum
+datetime: '2025-08-22T20:24:07'
+python: 3.12.11
+platform: Windows-10-10.0.19045-SP0
+torch: 2.7.0+cu128
+torchrl: 0.9.2
+git_sha: fd60c6d
+hparams:
+  algo: ppo
+  env: pendulum
+  max_grad_norm: 1.0
+  num_epochs: 10
+  sub_batch_size: 64

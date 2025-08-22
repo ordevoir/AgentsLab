@@ -1,0 +1,16 @@
+run_name: ppo_pendulum_20250822-210356
+algo: ppo
+env: pendulum
+started_at: '2025-08-22T21:03:56'
+user: ordevoir
+host: DESKTOP-ADI9MVA
+python: 3.12.11
+torch: 2.7.0+cu128
+device: cuda
+hparams:
+  max_grad_norm: 1.0
+  num_epochs: 10
+  sub_batch_size: 64
+  frames_per_batch: 1000
+  algo: ppo
+  env: pendulum
