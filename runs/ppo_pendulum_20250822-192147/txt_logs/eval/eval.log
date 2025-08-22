@@ -1,0 +1,4 @@
+2025-08-22 19:22:06,142 | return_mean=118.45309295654297 | max_episode_length=15.0 | global_frames=5000.0
+2025-08-22 19:22:06,154 | checkpoint saved: ppo_pendulum_step5000_ret118.453.pt
+2025-08-22 19:22:24,628 | return_mean=153.8497741699219 | max_episode_length=22.0 | global_frames=10000.0
+2025-08-22 19:22:24,634 | checkpoint saved: ppo_pendulum_step10000_ret153.850.pt
