@@ -1,0 +1,4 @@
+algo: PPO
+max_grad_norm: 1.0
+num_epochs: 10
+sub_batch_size: 64
