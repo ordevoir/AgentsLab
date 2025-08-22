@@ -1,0 +1,13 @@
+{
+  "algo_name": "ppo",
+  "env_name": "pendulum",
+  "run_name": "ppo_pendulum_20250822-231839",
+  "started_at": "2025-08-22T23:18:39",
+  "python": "3.12.11",
+  "platform": "Windows-11-10.0.26100-SP0",
+  "torch": "2.8.0+cu126",
+  "total_frames": 10000,
+  "frames_per_batch": 1000,
+  "num_epochs": 10,
+  "sub_batch_size": 64
+}
