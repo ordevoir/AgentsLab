@@ -1,2 +1,0 @@
-[2025-08-22 20:24:29,287] INFO: step=5000 return_mean=154.025713, max_episode_length=21.000000
-[2025-08-22 20:24:49,686] INFO: step=10000 return_mean=142.631339, max_episode_length=16.000000

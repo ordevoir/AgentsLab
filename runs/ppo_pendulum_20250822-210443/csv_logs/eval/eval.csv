@@ -1,3 +1,0 @@
-global_step,frames,episodes,return_mean,return_std,length_mean,max_episode_length
-750,4000,5,154.0257125854492,,,21
-1500,9000,5,142.63133850097657,,,16
