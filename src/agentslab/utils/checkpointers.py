@@ -6,7 +6,7 @@ import warnings
 import time
 import os
 import torch
-
+from torch.serialization import add_safe_globals
 
 @runtime_checkable
 class Stateful(Protocol):
@@ -21,6 +21,26 @@ def _torchrl_version() -> Optional[str]:
         return getattr(torchrl, "__version__", "unknown")
     except Exception:
         return None
+
+
+def _robust_torch_load(path, *, map_location=None):
+    # 1) сначала пытаемся безопасно
+    try:
+        return torch.load(path, map_location=map_location, weights_only=True)
+    except Exception as e1:
+        # 2) добавляем allowlist и пробуем ещё раз безопасно
+        try:
+            import torch.torch_version as tv
+            add_safe_globals([tv.TorchVersion])
+            return torch.load(path, map_location=map_location, weights_only=True)
+        except Exception as e2:
+            # 3) осознанный откат к небезопасной загрузке (если чекпоинт из доверенного источника)
+            warnings.warn(
+                "Safe load не удался, перехожу на weights_only=False. "
+                "Делайте это ТОЛЬКО для доверенных чекпоинтов.",
+                stacklevel=2,
+            )
+            return torch.load(path, map_location=map_location, weights_only=False)
 
 
 class CheckpointManager:
@@ -71,7 +91,7 @@ class CheckpointManager:
         best_path = self.ckpt_dir / "best.pt"
         if best_path.exists():
             try:
-                payload = torch.load(best_path, map_location="cpu")
+                payload = _robust_torch_load(best_path, map_location="cpu")
                 self._best_value = self._extract_metric(payload)
             except Exception:
                 warnings.warn("Не удалось прочитать существующий best.pt — пропускаю инициализацию лучшего значения.")
@@ -126,7 +146,7 @@ class CheckpointManager:
             raise FileNotFoundError(f"Чекпоинт не найден: {path}")
 
         ml = self.map_location if map_location is None else map_location
-        payload: Dict[str, Any] = torch.load(path, map_location=ml)
+        payload: Dict[str, Any] = _robust_torch_load(path, map_location=ml)
 
         states: Mapping[str, Any] = payload.get("statefuls", {})
         for name, obj in self.statefuls.items():
@@ -220,15 +240,31 @@ class CheckpointManager:
         except Exception:
             return None
 
-    def _load_into(self, obj: Stateful, state_dict: Mapping[str, Any], strict: bool) -> None:
+    def _load_into(self, obj, state_dict, strict: bool) -> None:
+        """Аккуратно грузим state_dict в obj, передавая strict только если он поддерживается."""
         if not hasattr(obj, "load_state_dict"):
             raise TypeError(f"Объект {obj!r} не поддерживает load_state_dict()")
-        ret = obj.load_state_dict(state_dict, strict=strict)
-        # Некоторые реализации возвращают детальный объект результата, другие — None.
-        # Если strict=False, подсветим возможные несоответствия (когда доступно).
+
+        import inspect
+        load_fn = obj.load_state_dict
+
+        # Узнаём, есть ли параметр 'strict' у этого метода
         try:
-            missing = getattr(ret, "missing_keys", lambda: [])()
-            unexpected = getattr(ret, "unexpected_keys", lambda: [])()
+            sig = inspect.signature(load_fn)
+            has_strict = "strict" in sig.parameters
+        except (TypeError, ValueError):
+            has_strict = False  # на всякий случай
+
+        # Загружаем
+        if has_strict:
+            ret = load_fn(state_dict, strict=strict)
+        else:
+            ret = load_fn(state_dict)  # optimizers, schedulers, scaler и др.
+
+        # Унифицированное предупреждение о несовпадениях (если метод что-то возвращает)
+        try:
+            missing = getattr(ret, "missing_keys", [])
+            unexpected = getattr(ret, "unexpected_keys", [])
             if (missing or unexpected) and not strict:
                 warnings.warn(f"load_state_dict: missing={missing}, unexpected={unexpected}")
         except Exception:
