@@ -219,9 +219,9 @@ class CheckpointManager:
         if isinstance(which, Path):
             return which
         w = which.lower()
-        if w == "last":
+        if w == "last" or w == "last.pt":
             return self.ckpt_dir / "last.pt"
-        if w == "best":
+        if w == "best" or w == "best.pt":
             return self.ckpt_dir / "best.pt"
         return Path(which)
 

@@ -12,23 +12,6 @@ from torchrl.data.tensor_specs import (
 )
 
 
-# def is_acts_discrete(action_spec):
-#     if isinstance(action_spec, OneHotDiscreteTensorSpec):
-#         return True
-#     elif isinstance(action_spec, BoundedTensorSpec):
-#         return False
-#     else:
-#         raise TypeError(f"Неизвестный тип action_spec: {type(action_spec)}")
-
-def is_acts_discrete(action_spec) -> bool:
-    """True для всех дискретных вариантов сред:
-    OneHotDiscreteTensorSpec, DiscreteTensorSpec, MultiDiscreteTensorSpec"""
-    return isinstance(
-        action_spec,
-        (OneHotDiscreteTensorSpec, DiscreteTensorSpec, MultiDiscreteTensorSpec),
-    )
-
-
 def get_num_action_logits(action_spec) -> int:
     """
     Возвращает число логитов, которое должна выпускать политика до преобразования
@@ -110,37 +93,7 @@ def build_stochastic_actor(network, action_spec, return_log_prob: bool = True):
             distribution_kwargs={"low": action_spec.low, "high": action_spec.high},
             return_log_prob=return_log_prob,
             spec=action_spec,
-            # для eval по умолчанию даём детерминизм (среднее), можно переопределить set_exploration_type(...)
-            default_interaction_type=InteractionType.DETERMINISTIC,
         )
 
     raise TypeError(f"Неизвестный тип action_spec: {type(action_spec)}")
 
-
-# def build_stochastic_actor(network, action_spec, return_log_prob=True):
-#     # Дискретные (one-hot) действия
-#     if isinstance(action_spec, OneHotDiscreteTensorSpec):
-#         td_module = TensorDictModule(network, in_keys=["observation"], out_keys=["logits"])
-#         return ProbabilisticActor(
-#             module=td_module,
-#             in_keys=["logits"],
-#             distribution_class=OneHotCategorical,
-#             return_log_prob=return_log_prob,
-#             spec=action_spec,
-#         )
-#     # Непрерывные действия (ограниченные low/high)
-#     elif isinstance(action_spec, BoundedTensorSpec):
-#         net_with_extractor = nn.Sequential(network, NormalParamExtractor())
-#         td_module = TensorDictModule(net_with_extractor, in_keys=["observation"], out_keys=["loc", "scale"])
-#         return ProbabilisticActor(
-#             module=td_module,
-#             in_keys=["loc", "scale"],
-#             distribution_class=TanhNormal,
-#             return_log_prob=return_log_prob,
-#             distribution_kwargs={"low": action_spec.low, "high": action_spec.high},
-#             spec=action_spec,
-#             default_interaction_type=InteractionType.DETERMINISTIC,
-#         )
-#     else:
-#         raise TypeError(f"Неизвестный тип action_spec: {type(action_spec)}")
-    

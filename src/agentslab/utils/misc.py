@@ -4,6 +4,7 @@ from dataclasses import dataclass
 
 @dataclass
 class RunPaths:
+    run_name: str
     root: Path
     run_dir: Path
     ckpt_dir: Path
@@ -11,6 +12,7 @@ class RunPaths:
     csv_eval: Path
     tb_train: Path
     tb_eval: Path
+    fig_dirs: Path
     meta_yaml: Path
 
 @dataclass
@@ -46,6 +48,7 @@ def generate_paths(root: Path, algo_name: str, env_name: str) -> RunPaths:
         run_dir = run_dir / f"{run_name}__{i}"
 
     return RunPaths(
+        run_name=run_name,
         root=root,
         run_dir=run_dir,
         ckpt_dir=run_dir / "checkpoints",
@@ -53,6 +56,7 @@ def generate_paths(root: Path, algo_name: str, env_name: str) -> RunPaths:
         csv_eval=run_dir / "csv_logs" / "eval.csv",
         tb_train=run_dir / "tb_logs" / "train",
         tb_eval=run_dir / "tb_logs" / "eval",
+        fig_dirs=run_dir / "figures",
         meta_yaml=run_dir / "meta_info.yaml",
     )
 
@@ -67,6 +71,7 @@ def restore_paths(root: Path, run_name: str) -> RunPaths:
     """
     run_dir = root / "runs" / run_name
     return RunPaths(
+        run_name=run_name,
         root=root,
         run_dir=run_dir,
         ckpt_dir=run_dir / "checkpoints",
@@ -74,6 +79,7 @@ def restore_paths(root: Path, run_name: str) -> RunPaths:
         csv_eval=run_dir / "csv_logs" / "eval.csv",
         tb_train=run_dir / "tb_logs" / "train",
         tb_eval=run_dir / "tb_logs" / "eval",
+        fig_dirs=run_dir / "figures",
         meta_yaml=run_dir / "meta_info.yaml",
     )
 

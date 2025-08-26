@@ -1,8 +1,8 @@
-from dataclasses import dataclass
-from typing import Union, Optional
+from typing import Optional
 import torch
 from typing import Dict
 from torchrl.envs.utils import set_exploration_type, ExplorationType
+from agentslab.envs.gym_factory import is_acts_discrete
 
 @torch.no_grad()
 def eval_policy(
@@ -25,7 +25,7 @@ def eval_policy(
     Возвращает словарь метрик:
       eval_reward_mean, eval_reward_sum, eval_step_count, episodes
     """
-    # tqdm (необязателен)
+
     try:
         from tqdm.auto import tqdm
         iterator = tqdm(
@@ -41,17 +41,33 @@ def eval_policy(
         is_tqdm = False
 
     was_training = getattr(policy, "training", False)
-    if deterministic and hasattr(policy, "eval"):
-        policy.eval()
+    policy.eval()
 
     episode_returns = []
     episode_lengths = []
+    
+    if deterministic:
+        expl_type = ExplorationType.MODE if is_acts_discrete(env.action_spec) else ExplorationType.DETERMINISTIC
+    else:
+        expl_type= ExplorationType.RANDOM
 
-    expl_type = ExplorationType.DETERMINISTIC if deterministic else ExplorationType.RANDOM
+
+    policy_device = next(policy.parameters()).device
+    env_device = getattr(env, "device", torch.device("cpu"))
+    
+    # создаем обертку, над policy, чтобы td автоматически перегонялась по девайсам
+    def policy_wrapper(td):
+        td = td.to(policy_device)
+        td = policy(td)
+        return td.to(env_device)
 
     for ep in iterator:
         with set_exploration_type(expl_type):
-            td = env.rollout(steps, policy)
+            td = env.rollout(
+                steps,
+                policy_wrapper,    # <-- вместо policy
+                auto_reset=True,
+            )
 
         # Возврат: суммируем по времени и усредняем по batch-осям (если есть)
         rew = td.get(("next", "reward"))  # shape ~ [T, *B, ...]
@@ -81,6 +97,6 @@ def eval_policy(
     return {
         "return_mean": avg_return,
         "return_sum": sum_return,
-        "max_episode_lengh": max_len,
+        "max_episode_length": max_len,
         "num_episodes": episodes,
     }
