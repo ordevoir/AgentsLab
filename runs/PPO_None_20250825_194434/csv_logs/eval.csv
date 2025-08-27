@@ -1,3 +1,0 @@
-return_mean,return_sum,max_episode_lengh,num_episodes,step
-309.6,1548.0,362,5,5000
-500.0,2500.0,499,5,10000
