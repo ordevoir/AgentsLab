@@ -30,6 +30,7 @@ class GeneralConfigs:
             self.env_name = self.env_id
 
 
+
 def generate_paths(root: Path, algo_name: str, env_name: str) -> RunPaths:
     """
     Формирует пути по схеме:
