@@ -1,6 +1,10 @@
 from pathlib import Path
 from datetime import datetime
 from dataclasses import dataclass
+import torch
+import random, os
+import numpy as np
+
 
 @dataclass
 class RunPaths:
@@ -29,6 +33,30 @@ class GeneralConfigs:
         if self.env_name is None:
             self.env_name = self.env_id
 
+
+def resolve_device(preferred: str | torch.device = "cuda"):
+
+    if preferred.lower() == "cuda":
+        if torch.cuda.is_available():
+            return torch.device(preferred)
+        else:
+            print("warning: cuda is not abvailable! cpu is using")
+            return torch.device("cpu")
+    if preferred.lower() == "cpu":
+        return torch.device("cpu")
+    else:
+        raise ValueError('Select "cuda" or "cpu"!')
+
+
+def set_global_seed(seed: int = 42, deterministic: bool = False):
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    torch.cuda.manual_seed_all(seed)
+    os.environ["PYTHONHASHSEED"] = str(seed)
+    if deterministic:
+        torch.backends.cudnn.deterministic = True
+        torch.backends.cudnn.benchmark = False
 
 
 def generate_paths(root: Path, algo_name: str, env_name: str) -> RunPaths:
