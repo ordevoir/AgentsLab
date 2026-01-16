@@ -90,7 +90,15 @@ class CSVLogger:
 
     def __repr__(self) -> str:
         return f"CSVLogger(path={self.path!s}, fieldnames={self._fieldnames})"
+    
+    def close(self) -> None:
+        pass  # placeholder для совместимости API
 
+    def __enter__(self) -> "CSVLogger":
+        return self
+
+    def __exit__(self, *args) -> None:
+        self.close()
 
 
 
@@ -164,6 +172,9 @@ class TBLogger:
 
     def close(self) -> None:
         self._writer.close()
+    
+    def __repr__(self) -> str:
+        return f"TBLogger(log_dir={self.log_dir!s}, step={self._step})"
 
     def __enter__(self) -> "TBLogger":
         return self

@@ -20,6 +20,7 @@ dependencies = [
   "numpy",
   "matplotlib",
   "tqdm",
+  "tensorboard",
 ]
 
 [tool.setuptools.packages.find]

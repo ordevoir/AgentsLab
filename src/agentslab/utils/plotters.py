@@ -61,7 +61,10 @@ def _style_context(style: Optional[str]):
         return nullcontext()
     if style in plt.style.available:
         return plt.style.context(style)
-    warnings.warn(f"Matplotlib style '{style}' не найден; используется стиль по умолчанию.")
+    warnings.warn(
+        f"Matplotlib style '{style}' не найден. "
+        f"Доступные: {plt.style.available[:5]}... (всего {len(plt.style.available)})"
+    )
     return nullcontext()
 
 
@@ -104,7 +107,7 @@ def plot_metrics_from_csv(
     """
     csv_path = Path(csv_path)
     if not csv_path.exists():
-        raise FileNotFoundError(f"train.csv не найден по пути: {csv_path}")
+        raise FileNotFoundError(f"CSV-файл не найден: {csv_path}")
 
     df = pd.read_csv(csv_path, low_memory=low_memory)
     return plot_metrics(
@@ -137,6 +140,7 @@ def plot_metrics(
     save_dir: Optional[Union[str, Path]] = None,
     show: bool = True,
     dpi: int = 120,
+    return_figures = False,
 ) -> Dict[str, object]:
     """
     Строит графики метрик из уже загруженного DataFrame.
@@ -161,13 +165,13 @@ def plot_metrics(
     if save_dir_path is not None:
         save_dir_path.mkdir(parents=True, exist_ok=True)
 
-    result: Dict[str, object] = {"x_col": x_col, "plotted": [], "saved": []}
+    result: Dict[str, object] = {"x_col": x_col, "plotted": [], "saved": [], "figures": []}
 
     with _style_context(style):
         for col in num_cols:
             y = df[col]
             if ema is not None:
-                y = pd.Series(y, copy=False).ewm(alpha=ema, adjust=False).mean()
+                y = y.ewm(alpha=ema, adjust=False).mean()
 
             fig = plt.figure(figsize=figsize)
             ax = fig.gca()
@@ -188,15 +192,18 @@ def plot_metrics(
             fig.tight_layout()
 
             if save_dir_path is not None:
-                out_path = save_dir_path / f"{col}.png"
+                safe_name = col.replace("/", "_").replace("\\", "_")
+                out_path = save_dir_path / f"{safe_name}.png"
                 fig.savefig(out_path, dpi=dpi, bbox_inches="tight")
                 result["saved"].append(str(out_path))
 
             if show:
                 plt.show()
-            else:
-                plt.close(fig)
+            plt.close(fig)  # закрывать всегда
 
             result["plotted"].append(col)
+
+            if return_figures:
+                result["figures"].append(fig)
 
     return result

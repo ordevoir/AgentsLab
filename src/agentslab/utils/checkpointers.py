@@ -332,24 +332,92 @@ class CheckpointManager:
         except Exception:
             return None
 
+    # --------------------- Old version ----------------------------------------
+    #
+    # def _load_into(self, obj, state_dict, strict: bool) -> None:
+    #     """Аккуратно грузим state_dict в obj, передавая strict только если он поддерживается."""
+    #     if not hasattr(obj, "load_state_dict"):
+    #         raise TypeError(f"Объект {obj!r} не поддерживает load_state_dict()")
+
+    #     load_fn = obj.load_state_dict
+    #     # Узнаём, есть ли параметр 'strict' у этого метода
+    #     try:
+    #         sig = inspect.signature(load_fn)
+    #         has_strict = "strict" in sig.parameters
+    #     except (TypeError, ValueError):
+    #         has_strict = False
+
+    #     # Загружаем
+    #     if has_strict:
+    #         ret = load_fn(state_dict, strict=strict)
+    #     else:
+    #         ret = load_fn(state_dict)  # optimizers, schedulers, scaler и др.
+
+    #     # Унифицированное предупреждение о несовпадениях (если метод что-то возвращает)
+    #     try:
+    #         missing = getattr(ret, "missing_keys", [])
+    #         unexpected = getattr(ret, "unexpected_keys", [])
+    #         if (missing or unexpected) and not strict:
+    #             warnings.warn(f"load_state_dict: missing={missing}, unexpected={unexpected}")
+    #     except Exception:
+    #         pass
+
+
     def _load_into(self, obj, state_dict, strict: bool) -> None:
-        """Аккуратно грузим state_dict в obj, передавая strict только если он поддерживается."""
+        """Аккуратно грузим state_dict в obj, передавая strict только если он поддерживается.
+        Дополнительно: если obj — Optimizer, переносим его state-тензоры на device параметров,
+        чтобы избежать device-mismatch после torch.load(map_location="cpu").
+        """
         if not hasattr(obj, "load_state_dict"):
             raise TypeError(f"Объект {obj!r} не поддерживает load_state_dict()")
 
         load_fn = obj.load_state_dict
+
         # Узнаём, есть ли параметр 'strict' у этого метода
         try:
             sig = inspect.signature(load_fn)
             has_strict = "strict" in sig.parameters
+            has_varkw = any(p.kind == inspect.Parameter.VAR_KEYWORD for p in sig.parameters.values())
         except (TypeError, ValueError):
             has_strict = False
+            has_varkw = False
 
         # Загружаем
-        if has_strict:
+        if has_strict or has_varkw:
+            # если есть **kwargs, тоже пробуем передать strict
             ret = load_fn(state_dict, strict=strict)
         else:
             ret = load_fn(state_dict)  # optimizers, schedulers, scaler и др.
+
+        # ---- FIX: перенос optimizer.state на device параметров ----
+        if isinstance(obj, torch.optim.Optimizer):
+            # device берем из первого доступного параметра оптимайзера
+            target_device = None
+            try:
+                for group in obj.param_groups:
+                    for p in group.get("params", []):
+                        if torch.is_tensor(p):
+                            target_device = p.device
+                            raise StopIteration
+            except StopIteration:
+                pass
+            except Exception:
+                target_device = None
+
+            if target_device is not None:
+                def _to_device(x):
+                    if torch.is_tensor(x):
+                        return x.to(target_device)
+                    if isinstance(x, dict):
+                        return {k: _to_device(v) for k, v in x.items()}
+                    if isinstance(x, (list, tuple)):
+                        y = [_to_device(v) for v in x]
+                        return type(x)(y)
+                    return x
+
+                for state in obj.state.values():
+                    for k, v in list(state.items()):
+                        state[k] = _to_device(v)
 
         # Унифицированное предупреждение о несовпадениях (если метод что-то возвращает)
         try:
@@ -359,6 +427,7 @@ class CheckpointManager:
                 warnings.warn(f"load_state_dict: missing={missing}, unexpected={unexpected}")
         except Exception:
             pass
+
 
     def _prune_step_checkpoints(self) -> None:
         if self.max_to_keep is None or self.max_to_keep <= 0:
