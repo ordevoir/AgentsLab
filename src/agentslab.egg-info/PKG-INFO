@@ -15,6 +15,7 @@ Requires-Dist: mpe2
 Requires-Dist: numpy
 Requires-Dist: matplotlib
 Requires-Dist: tqdm
+Requires-Dist: tensorboard
 
 # AgentsLab (TorchRL)
 

@@ -7,3 +7,4 @@ mpe2
 numpy
 matplotlib
 tqdm
+tensorboard
