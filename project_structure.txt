@@ -1,0 +1,97 @@
+AgentsLab/
+├── notebooks/
+│   ├── ppo_gym_origin.ipynb
+│   ├── PPO_gymnasium.ipynb
+│   └── PPO_vmas.ipynb
+├── runs/
+│   ├── PPO_navigation_20250831_200316/
+│   │   ├── checkpoints/
+│   │   │   └── last.pt
+│   │   ├── csv_logs/
+│   │   │   └── train.csv
+│   │   ├── figures/
+│   │   │   ├── episodic_return_mean.png
+│   │   │   ├── policy_loss.png
+│   │   │   └── value_loss.png
+│   │   └── tb_logs/
+│   │       ├── eval/
+│   │       │   └── events.out.tfevents.1756659796.DESKTOP-ADI9MVA.16960.3
+│   │       └── train/
+│   │           └── events.out.tfevents.1756659796.DESKTOP-ADI9MVA.16960.2
+│   ├── PPO_navigation_20250831_233925/
+│   │   ├── checkpoints/
+│   │   │   ├── last.pt
+│   │   │   ├── step_20000.pt
+│   │   │   ├── step_40000.pt
+│   │   │   ├── step_60000.pt
+│   │   │   └── step_80000.pt
+│   │   ├── csv_logs/
+│   │   │   ├── eval.csv
+│   │   │   └── train.csv
+│   │   ├── figures/
+│   │   │   ├── episodic_return_mean.png
+│   │   │   ├── policy_loss.png
+│   │   │   └── value_loss.png
+│   │   └── tb_logs/
+│   │       ├── eval/
+│   │       │   └── events.out.tfevents.1756672767.DESKTOP-ADI9MVA.6168.1
+│   │       └── train/
+│   │           └── events.out.tfevents.1756672767.DESKTOP-ADI9MVA.6168.0
+│   └── PPO_navigation_20250901_013259/
+│       ├── checkpoints/
+│       │   ├── last.pt
+│       │   ├── step_20000.pt
+│       │   └── step_40000.pt
+│       ├── csv_logs/
+│       │   ├── eval.csv
+│       │   └── train.csv
+│       ├── figures/
+│       │   ├── episodic_return_mean.png
+│       │   ├── policy_loss.png
+│       │   └── value_loss.png
+│       └── tb_logs/
+│           ├── eval/
+│           │   └── events.out.tfevents.1756679579.DESKTOP-ADI9MVA.6168.3
+│           └── train/
+│               └── events.out.tfevents.1756679579.DESKTOP-ADI9MVA.6168.2
+├── src/
+│   ├── agentslab/
+│   │   ├── envs/
+│   │   │   ├── __init__.py
+│   │   │   ├── gym_envs.py
+│   │   │   └── vmas_envs.py
+│   │   ├── networks/
+│   │   │   ├── __init__.py
+│   │   │   └── networks.py
+│   │   ├── policies/
+│   │   │   ├── __init__.py
+│   │   │   └── policy.py
+│   │   ├── runners/
+│   │   │   ├── __init__.py
+│   │   │   ├── evals.py
+│   │   │   ├── objectives.py
+│   │   │   ├── schedulers.py
+│   │   │   └── trainers.py
+│   │   ├── storages/
+│   │   │   ├── __init__.py
+│   │   │   ├── buffers.py
+│   │   │   └── collectors.py
+│   │   ├── tracking/
+│   │   │   ├── __init__.py
+│   │   │   ├── checkpointers.py
+│   │   │   ├── loggers.py
+│   │   │   └── plotters.py
+│   │   ├── utils/
+│   │   │   ├── __init__.py
+│   │   │   ├── complete.wav
+│   │   │   └── misc.py
+│   │   └── __init__.py
+│   └── agentslab.egg-info/
+│       ├── dependency_links.txt
+│       ├── PKG-INFO
+│       ├── requires.txt
+│       ├── SOURCES.txt
+│       └── top_level.txt
+├── pyproject.toml
+├── README.md
+└── scan_structure.py.py
