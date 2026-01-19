@@ -1,6 +1,7 @@
 README.md
 pyproject.toml
 src/agentslab/__init__.py
+src/agentslab/scan_structure.py
 src/agentslab.egg-info/PKG-INFO
 src/agentslab.egg-info/SOURCES.txt
 src/agentslab.egg-info/dependency_links.txt
@@ -8,7 +9,7 @@ src/agentslab.egg-info/requires.txt
 src/agentslab.egg-info/top_level.txt
 src/agentslab/envs/__init__.py
 src/agentslab/envs/gym_envs.py
-src/agentslab/envs/marl_envs.py
+src/agentslab/envs/vmas_envs.py
 src/agentslab/networks/__init__.py
 src/agentslab/networks/networks.py
 src/agentslab/policies/__init__.py
@@ -18,9 +19,9 @@ src/agentslab/runners/evals.py
 src/agentslab/runners/objectives.py
 src/agentslab/runners/schedulers.py
 src/agentslab/runners/trainers.py
-src/agentslab/storage/__init__.py
-src/agentslab/storage/buffers.py
-src/agentslab/storage/collectors.py
+src/agentslab/storages/__init__.py
+src/agentslab/storages/buffers.py
+src/agentslab/storages/collectors.py
 src/agentslab/tracking/__init__.py
 src/agentslab/tracking/checkpointers.py
 src/agentslab/tracking/loggers.py

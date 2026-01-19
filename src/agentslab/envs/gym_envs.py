@@ -66,7 +66,6 @@ def _infer_float_obs_keys(observation_spec) -> List[str]:
 
 def make_gym_env(cfg: GymConfig) -> TransformedEnv:
 
-
     base_env = GymEnv(env_name=cfg.env_id, 
                       device=cfg.device,
                       render_mode=cfg.render_mode
