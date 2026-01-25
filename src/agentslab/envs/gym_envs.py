@@ -1,52 +1,51 @@
-from dataclasses import dataclass
-from typing import Union, Optional, Sequence, List, Dict, Any, Tuple
-from IPython.display import display
-import time
-import numpy as np
-import matplotlib.pyplot as plt
 
+"""
+Gymnasium backend (single-agent) for AgentsLab.
+
+Содержит:
+- make_gym_env: фабрика TorchRL GymEnv + transforms (dtype, obs-norm, step counter)
+- play: прокат одного эпизода с рендером (rgb_array/human)
+- is_acts_discrete: утилита для определения дискретности action_spec
+"""
+
+from __future__ import annotations
+
+import time
+from typing import Any, Dict, List, Optional, Sequence, Tuple, Union
+
+import matplotlib.pyplot as plt
+import numpy as np
 import torch
-from torchrl.envs.utils import ExplorationType, set_exploration_type, step_mdp
-from torchrl.envs import GymEnv, TransformedEnv
-from torchrl.envs.transforms import Compose, ObservationNorm, DoubleToFloat, StepCounter
 from torchrl.data.tensor_specs import (
-    OneHotDiscreteTensorSpec,
     DiscreteTensorSpec,
     MultiDiscreteTensorSpec,
+    OneHotDiscreteTensorSpec,
 )
+from torchrl.envs import GymEnv, TransformedEnv
+from torchrl.envs.transforms import Compose, DoubleToFloat, ObservationNorm, StepCounter
+from torchrl.envs.utils import ExplorationType, set_exploration_type, step_mdp
+
+from agentslab.envs.env_configs import GymEnvConfig
+
+NestedKey = Union[str, Tuple[str, ...]]  # приблизительно; TorchRL/TensorDict допускают nested ключи
+
 
 def is_acts_discrete(action_spec) -> bool:
-    """True для всех дискретных вариантов сред:
-    OneHotDiscreteTensorSpec, DiscreteTensorSpec, MultiDiscreteTensorSpec"""
-    return isinstance(
-        action_spec,
-        (OneHotDiscreteTensorSpec, DiscreteTensorSpec, MultiDiscreteTensorSpec),
-    )
-
-@dataclass
-class GymConfig:
-    env_id: str
-    render_mode: Optional[str] = None
-    device: Union[str, torch.device] = "cpu"
-    seed: Optional[int] = None
-    max_steps: Optional[int] = None
-    normalize_obs: bool = True
-    init_norm_iter: int = 1000
-    obs_keys: Optional[Sequence[str]] = None
-    # loc/scale можно передавать как число, список или тензор
-    loc: Optional[Union[float, Sequence[float], torch.Tensor]] = None
-    scale: Optional[Union[float, Sequence[float], torch.Tensor]] = None
-    double_to_float: bool = True
+    """True для всех дискретных вариантов: OneHotDiscreteTensorSpec, DiscreteTensorSpec, MultiDiscreteTensorSpec."""
+    return isinstance(action_spec, (OneHotDiscreteTensorSpec, DiscreteTensorSpec, MultiDiscreteTensorSpec))
 
 
-def _infer_float_obs_keys(observation_spec) -> List[str]:
-    """Выбираем float-наблюдения (не пиксели)."""
+def _infer_float_obs_keys(observation_spec) -> List[NestedKey]:
+    """
+    Выбираем float-наблюдения (не пиксели).
+    Возвращаем список ключей (NestedKey) для CompositeSpec или ["observation"] для простого spec.
+    """
     deny_substrings = ("pixel", "pixels", "image", "images", "rgb", "frame", "frames")
     float_dtypes = {torch.float16, torch.bfloat16, torch.float32, torch.float64}
 
     try:
         if hasattr(observation_spec, "keys"):
-            keys = []
+            keys: List[NestedKey] = []
             for k in observation_spec.keys(True, True):
                 sub = observation_spec[k]
                 dt = getattr(sub, "dtype", None)
@@ -56,6 +55,7 @@ def _infer_float_obs_keys(observation_spec) -> List[str]:
                         continue
                     keys.append(k)
             return keys or ["observation"]
+
         dt = getattr(observation_spec, "dtype", None)
         if dt in float_dtypes:
             return ["observation"]
@@ -64,64 +64,129 @@ def _infer_float_obs_keys(observation_spec) -> List[str]:
         return ["observation"]
 
 
-def make_gym_env(cfg: GymConfig) -> TransformedEnv:
+def make_gym_env(cfg: GymEnvConfig) -> TransformedEnv:
+    """
+    Создаёт TorchRL GymEnv и оборачивает трансформами согласно GymEnvConfig.
 
-    base_env = GymEnv(env_name=cfg.env_id, 
-                      device=cfg.device,
-                      render_mode=cfg.render_mode
-                      )
+    Соответствие GymEnvConfig:
+      - env_id -> GymEnv(env_name=...)
+      - render_mode -> GymEnv(render_mode=...)
+      - env_kwargs -> пробрасывается в GymEnv / gymnasium.make
+      - seed -> base_env.set_seed
+      - double_to_float -> DoubleToFloat
+      - normalize_obs/init_norm_iter/loc/scale/obs_keys -> ObservationNorm (+ init_stats / ручные loc/scale)
+      - max_steps -> StepCounter(max_steps=...) (truncation)
+    """
+    # Важно: по твоему условию device уже резолвится в общем конфиге,
+    # поэтому здесь ожидаем, что cfg.device — уже валидное устройство/строка.
+    device = cfg.device
 
+    env_kwargs: Dict[str, Any] = dict(getattr(cfg, "env_kwargs", {}) or {})
+    # Не допускаем конфликтов по именам с явными аргументами.
+    # (Если user положил render_mode в env_kwargs — cfg.render_mode имеет приоритет.)
+    env_kwargs.pop("render_mode", None)
+    env_kwargs.pop("device", None)
+    env_kwargs.pop("env_name", None)
+
+    # GymEnv в разных версиях TorchRL принимал kwargs по-разному.
+    # Делаем безопасно: сначала пробуем прокинуть как **env_kwargs, при TypeError — как env_kwargs=...
+    try:
+        base_env = GymEnv(
+            env_name=cfg.env_id,
+            device=device,
+            render_mode=cfg.render_mode,
+            **env_kwargs,
+        )
+    except TypeError:
+        base_env = GymEnv(
+            env_name=cfg.env_id,
+            device=device,
+            render_mode=cfg.render_mode,
+            env_kwargs=env_kwargs,
+        )
+
+    # Сидирование TorchRL-окружения
     if cfg.seed is not None:
-        base_env.set_seed(cfg.seed)  # корректный способ сидировать TorchRL-окружение
-    # https://docs.pytorch.org/rl/...: env.set_seed(...) существует и возвращает следующий сид
+        base_env.set_seed(cfg.seed)
 
-    transforms = []
+    transforms: List[Any] = []
 
-    # Сразу приводим double->float (как в туториалах TorchRL).
+    # dtype: float64 -> float32
     if cfg.double_to_float:
         transforms.append(DoubleToFloat())
 
-    # Нормализация наблюдений (обычно одного ключа "observation").
-    obs_norm = None
+    # Нормализация наблюдений.
+    # ВАЖНО: obs_keys в текущей архитектуре используется как "какие ключи нормализовать" (а не "какие выдавать").
+    obs_norms: List[ObservationNorm] = []
     if cfg.normalize_obs:
-        norm_keys = list(cfg.obs_keys) if cfg.obs_keys is not None else _infer_float_obs_keys(base_env.observation_spec)
-        # Берём один «лучший» ключ (если нужно несколько — создайте по ObservationNorm на ключ)
-        selected_key = norm_keys[0]
-        obs_norm = ObservationNorm(in_keys=[selected_key])
-        transforms.append(obs_norm)
+        norm_keys: List[NestedKey] = list(cfg.obs_keys) if cfg.obs_keys is not None else _infer_float_obs_keys(
+            base_env.observation_spec
+        )
 
-    # Счётчик шагов
-    if cfg.max_steps is not None:
-        transforms.append(StepCounter(max_steps=cfg.max_steps))
-    else:
-        transforms.append(StepCounter())
+        # Самый надёжный вариант (и проще для loc/scale): по одному ObservationNorm на ключ.
+        for k in norm_keys:
+            tr = ObservationNorm(in_keys=[k])
+            transforms.append(tr)
+            obs_norms.append(tr)
+
+    # Time-limit => truncation
+    transforms.append(StepCounter(max_steps=cfg.max_steps) if cfg.max_steps is not None else StepCounter())
 
     env = TransformedEnv(base_env, Compose(*transforms))
 
-    # Инициализация статистик НОРМАЛИЗАЦИИ — только после того как трансформер прикреплён к env!
-    if cfg.normalize_obs and obs_norm is not None:
-        # Если лок/скейл не заданы — оценим их случайным роллаутом (канонически reduce_dim=0, cat_dim=0)
-        if cfg.loc is None or cfg.scale is None:
-            # можно явно указать key=selected_key; по умолчанию берётся первый in_key
-            obs_norm.init_stats(num_iter=cfg.init_norm_iter, reduce_dim=0, cat_dim=0)
-        # Если переданы loc/scale — выставляем явно
+    # Инициализация статистик нормализации — только после того, как трансформы прикреплены к env
+    if cfg.normalize_obs and obs_norms:
+        # Логика:
+        # 1) Если хотя бы один из loc/scale не задан — пытаемся оценить статистики роллаутом, если init_norm_iter > 0
+        # 2) Если init_norm_iter == 0 и чего-то не хватает — ставим дефолты (loc=0, scale=1) и затем применяем override
+        need_stats = (cfg.loc is None) or (cfg.scale is None)
+
+        if need_stats and cfg.init_norm_iter > 0:
+            for tr in obs_norms:
+                tr.init_stats(num_iter=cfg.init_norm_iter, reduce_dim=0, cat_dim=0)
+        elif need_stats and cfg.init_norm_iter == 0:
+            # fail-safe: без статистик задаём identity-нормализацию
+            for tr in obs_norms:
+                tr.loc = torch.as_tensor(0.0, device=device, dtype=torch.float32)
+                tr.scale = torch.as_tensor(1.0, device=device, dtype=torch.float32)
+
+        # Override loc/scale, если заданы пользователем.
+        # Поддерживаем:
+        #  - скаляр/массив -> применяется ко всем ключам (broadcast допустим)
+        #  - dict {key: value} -> применяется точечно
         if cfg.loc is not None:
-            obs_norm.loc = torch.as_tensor(cfg.loc, device=cfg.device, dtype=torch.float32)
+            if isinstance(cfg.loc, dict):
+                for tr in obs_norms:
+                    k = tr.in_keys[0]
+                    if k in cfg.loc:
+                        tr.loc = torch.as_tensor(cfg.loc[k], device=device, dtype=torch.float32)
+            else:
+                val = torch.as_tensor(cfg.loc, device=device, dtype=torch.float32)
+                for tr in obs_norms:
+                    tr.loc = val
+
         if cfg.scale is not None:
-            obs_norm.scale = torch.as_tensor(cfg.scale, device=cfg.device, dtype=torch.float32)
+            if isinstance(cfg.scale, dict):
+                for tr in obs_norms:
+                    k = tr.in_keys[0]
+                    if k in cfg.scale:
+                        tr.scale = torch.as_tensor(cfg.scale[k], device=device, dtype=torch.float32)
+            else:
+                val = torch.as_tensor(cfg.scale, device=device, dtype=torch.float32)
+                for tr in obs_norms:
+                    tr.scale = val
 
     return env
 
 
 def _format_frame(frame) -> Optional[np.ndarray]:
     """Приводим кадр к формату, удобному для imshow."""
-    
     if frame is None:
         return None
     if isinstance(frame, torch.Tensor):
         frame = frame.detach().cpu().numpy()
 
-    # Если каналы идут первым измерением (C, H, W) и C<width
+    # (C, H, W) -> (H, W, C)
     if frame.ndim == 3 and frame.shape[0] in (1, 3, 4) and frame.shape[0] < frame.shape[-1]:
         frame = np.transpose(frame, (1, 2, 0))
 
@@ -129,19 +194,19 @@ def _format_frame(frame) -> Optional[np.ndarray]:
     if frame.ndim == 3 and frame.shape[-1] == 4:
         frame = frame[..., :3]
 
-    # Одноканальные кадры -> (H, W)
+    # (H, W, 1) -> (H, W)
     if frame.ndim == 3 and frame.shape[-1] == 1:
         frame = frame[..., 0]
 
     return frame
 
 
-def _get_actor_device(actor) -> torch.device:
+def _get_actor_device(actor: torch.nn.Module) -> torch.device:
     try:
         return next(actor.parameters()).device
     except StopIteration:
         return torch.device("cpu")
-    
+
 
 def play(
     actor: torch.nn.Module,
@@ -155,43 +220,35 @@ def play(
 ) -> Dict[str, Any]:
     """
     Прокатать один эпизод в готовой среде (rgb_array/human), показать кадры и вернуть статистику.
-    Совместимо с TorchRL-актером, который кладёт действие в ключ "action".
 
-    Параметры:
-      - actor: torch.nn.Module (TorchRL policy / Probabilistic/Deterministic).
-      - env: уже созданный TransformedEnv (например, с render_mode="rgb_array").
-      - fps: целевой FPS для паузы между кадрами (если None/<=0 — без паузы).
-      - exp_type: ExplorationType; если None — MODE для дискретных действий, иначе DETERMINISTIC.
-      - figsize: размер фигуры для Matplotlib при rgb_array.
-      - return_frames: собрать кадры и вернуть в выходном dict.
-      - max_steps: жёсткий лимит шагов (если нужно).
+    Совместимо с TorchRL-актером, который кладёт действие в ключ "action".
 
     Возвращает:
       {"steps": int, "return": float, "terminated": bool, "truncated": bool, "frames": Optional[List[np.ndarray]]}
     """
     assert hasattr(env, "render"), "Окружение не поддерживает render(). Укажи корректный render_mode при создании."
 
-    # Выбор exploration type по умолчанию
-    # Выбор exploration type (если не задан)
+    # ExplorationType по умолчанию
     if exp_type is None:
         exp_type = ExplorationType.MODE if is_acts_discrete(env.action_spec) else ExplorationType.DETERMINISTIC
 
-    # Девайсы
     actor.eval()
     actor_device = _get_actor_device(actor)
-    env_device = env.device if hasattr(env, "device") else torch.device("cpu")
+    env_device = getattr(env, "device", torch.device("cpu"))
 
-    # Признак inline-рендера
-    inline = getattr(getattr(env, "base_env", env), "render_mode", None) == "rgb_array"
+    # inline-рендер для Jupyter: только для rgb_array
+    base = getattr(env, "base_env", env)
+    inline = getattr(base, "render_mode", None) == "rgb_array"
 
-    # Подготовка визуализации
     fig = ax = im = display_handle = None
     if inline:
+        # Lazy import, чтобы модуль не требовал IPython вне ноутбука
+        from IPython.display import display  # type: ignore
+
         fig, ax = plt.subplots(figsize=figsize)
 
     frames: Optional[List[np.ndarray]] = [] if return_frames else None
 
-    # Инициализация эпизода
     td = env.reset()
     done = False
     steps = 0
@@ -201,13 +258,11 @@ def play(
 
     try:
         while not done:
-            # Подаём td в актёр -> получаем действие в ключе "action"
             with torch.no_grad(), set_exploration_type(exp_type):
                 td_actor = td.to(actor_device)
                 td_actor = actor(td_actor)
                 td = td_actor.to(env_device)
 
-            # Шаг среды
             td = env.step(td)
 
             # Рендеринг
@@ -215,40 +270,34 @@ def play(
                 frame = _format_frame(env.render())
                 if frame is not None:
                     if im is None:
-                        im = ax.imshow(frame)
-                        ax.set_axis_off()
-                        display_handle = display(fig, display_id=True)
+                        im = ax.imshow(frame)  # type: ignore[union-attr]
+                        ax.set_axis_off()      # type: ignore[union-attr]
+                        display_handle = display(fig, display_id=True)  # type: ignore[misc]
                     else:
-                        im.set_data(frame)
-                        display_handle.update(fig)
+                        im.set_data(frame)  # type: ignore[union-attr]
+                        display_handle.update(fig)  # type: ignore[union-attr]
                     if frames is not None:
                         frames.append(frame.copy())
             else:
-                env.render()  # для "human" просто обновляем окно
+                env.render()
 
-            # Dones
             term = td.get(("next", "terminated"), torch.zeros((), dtype=torch.bool))
             trunc = td.get(("next", "truncated"), torch.zeros((), dtype=torch.bool))
 
-            # Булевы флаги (учёт возможных батчевых форм)
             last_term = bool(term.any().item()) if term.numel() > 0 else bool(term.item())
             last_trunc = bool(trunc.any().item()) if trunc.numel() > 0 else bool(trunc.item())
             done = last_term or last_trunc
 
-            # Награда
             rew = td.get(("next", "reward"), None)
             if rew is not None:
                 ep_return += float(rew.sum().item())
 
-            # Шифтируем ("next" -> root) для следующего шага
             td = step_mdp(td)
 
-            # Лимит по шагам
             steps += 1
             if max_steps is not None and steps >= max_steps:
                 done = True
 
-            # Регулировка FPS
             if fps and fps > 0:
                 time.sleep(max(0.0, 1.0 / float(fps)))
 

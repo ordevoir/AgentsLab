@@ -56,8 +56,14 @@ AgentsLab/
 │               └── events.out.tfevents.1756679579.DESKTOP-ADI9MVA.6168.2
 ├── src/
 │   ├── agentslab/
+│   │   ├── core/
+│   │   │   ├── __init__.py
+│   │   │   ├── configs.py
+│   │   │   ├── paths.py
+│   │   │   └── seeding.py
 │   │   ├── envs/
 │   │   │   ├── __init__.py
+│   │   │   ├── env_confits.py
 │   │   │   ├── gym_envs.py
 │   │   │   └── vmas_envs.py
 │   │   ├── networks/
@@ -76,22 +82,23 @@ AgentsLab/
 │   │   │   ├── __init__.py
 │   │   │   ├── buffers.py
 │   │   │   └── collectors.py
-│   │   ├── tracking/
-│   │   │   ├── __init__.py
-│   │   │   ├── checkpointers.py
-│   │   │   ├── loggers.py
-│   │   │   └── plotters.py
 │   │   ├── utils/
 │   │   │   ├── __init__.py
+│   │   │   ├── checkpointers.py
 │   │   │   ├── complete.wav
-│   │   │   └── misc.py
-│   │   └── __init__.py
+│   │   │   ├── loggers.py
+│   │   │   ├── misc.py
+│   │   │   └── plotters.py
+│   │   ├── __init__.py
+│   │   ├── project_structure.txt
+│   │   └── scan_structure.py
 │   └── agentslab.egg-info/
 │       ├── dependency_links.txt
 │       ├── PKG-INFO
 │       ├── requires.txt
 │       ├── SOURCES.txt
 │       └── top_level.txt
+├── project_structure.txt
 ├── pyproject.toml
 ├── README.md
-└── scan_structure.py.py
+└── scan_structure.py
