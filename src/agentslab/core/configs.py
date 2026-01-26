@@ -3,8 +3,12 @@ from typing import Union
 
 import torch
 
+__all__ = [
+    "resolve_device",
+    "GeneralConfigs",
+]
 
-def _resolve_device(preferred: Union[str, torch.device, None]) -> torch.device:
+def resolve_device(preferred: Union[str, torch.device, None]) -> torch.device:
     """
     Резолвит устройство для вычислений.
     
@@ -86,5 +90,5 @@ class GeneralConfigs:
     deterministic: bool = False
     
     def __post_init__(self):
-        self.device = _resolve_device(self.device)
+        self.device = resolve_device(self.device)
 
