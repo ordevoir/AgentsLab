@@ -1,5 +1,6 @@
 """Управление путями и структурой директорий эксперимента."""
 
+import re
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
@@ -52,6 +53,56 @@ class RunPaths:
         return self
 
 
+def _sanitize_for_path(name: str) -> str:
+    """
+    Санитизирует строку для безопасного использования в путях.
+    
+    Преобразования:
+        - "/" → "-" (разделитель PettingZoo: "mpe/simple_spread_v3" → "mpe-simple_spread_v3")
+        - "\\" → "-"
+        - пробелы → "_"
+        - убирает небезопасные символы: < > : " | ? *
+        - схлопывает множественные "-" и "_"
+    
+    Args:
+        name: Исходная строка (например, env_name)
+        
+    Returns:
+        Безопасная для файловой системы строка
+        
+    Examples:
+        >>> _sanitize_for_path("mpe/simple_spread_v3")
+        'mpe-simple_spread_v3'
+        >>> _sanitize_for_path("ALE/Pong-v5")
+        'ALE-Pong-v5'
+        >>> _sanitize_for_path("my env:test")
+        'my_env_test'
+    """
+    if not name:
+        return name
+    
+    # Заменяем слэши на дефис
+    result = name.replace("/", "-").replace("\\", "-")
+    
+    # Пробелы → подчёркивание
+    result = result.replace(" ", "_")
+    
+    # Заменяем двоеточие на подчёркивание (сохраняем разделение)
+    result = result.replace(":", "_")
+    
+    # Убираем остальные небезопасные символы для Windows/Linux
+    result = re.sub(r'[<>"|?*]', "", result)
+    
+    # Схлопываем множественные дефисы и подчёркивания
+    result = re.sub(r'-+', '-', result)
+    result = re.sub(r'_+', '_', result)
+    
+    # Убираем дефисы/подчёркивания в начале и конце
+    result = result.strip("-_")
+    
+    return result
+
+
 def find_project_root(start_path: Optional[Path] = None) -> Path:
     """
     Ищет корень проекта по маркерным файлам.
@@ -101,13 +152,13 @@ def generate_paths(
         {root}/runs/{run_name}/
     
     Имя run формируется по правилам:
-        1. Если run_name задан — используется как есть
+        1. Если run_name задан — используется как есть (после санитизации)
         2. Иначе собирается: {prefix}_{algo_name}_{env_name}_{timestamp}_{suffix}
-           (пустые компоненты пропускаются)
+           (пустые компоненты пропускаются, env_name санитизируется)
     
     Args:
         algo_name: Название алгоритма (например, "PPO")
-        env_name: Название среды (например, "CartPole-v1")
+        env_name: Название среды (например, "CartPole-v1", "mpe/simple_spread_v3")
         root: Корневая директория проекта (автоопределение если None)
         prefix: Префикс к имени run
         suffix: Суффикс к имени run
@@ -125,6 +176,16 @@ def generate_paths(
         >>> paths = generate_paths("PPO", "CartPole-v1")
         >>> paths.run_name
         'PPO_CartPole-v1_20250125_143022'
+        
+        >>> # PettingZoo среда (слэш заменяется на дефис)
+        >>> paths = generate_paths("MAPPO", "mpe/simple_spread_v3")
+        >>> paths.run_name
+        'MAPPO_mpe-simple_spread_v3_20250125_143022'
+        
+        >>> # Atari среда
+        >>> paths = generate_paths("DQN", "ALE/Pong-v5")
+        >>> paths.run_name
+        'DQN_ALE-Pong-v5_20250125_143022'
         
         >>> # С префиксом и суффиксом
         >>> paths = generate_paths("PPO", "CartPole-v1", prefix="exp01", suffix="seed42")
@@ -151,9 +212,15 @@ def generate_paths(
         
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         
+        # Санитизируем env_name для безопасного использования в пути
+        safe_env_name = _sanitize_for_path(env_name) if env_name else None
+        
         # Собираем компоненты имени (пропускаем None и пустые)
-        components = [prefix, algo_name, env_name, timestamp, suffix]
+        components = [prefix, algo_name, safe_env_name, timestamp, suffix]
         run_name = "_".join(c for c in components if c)
+    else:
+        # Санитизируем явно заданное имя
+        run_name = _sanitize_for_path(run_name)
     
     # Проверяем уникальность и создаём пути
     run_dir = root / "runs" / run_name
@@ -239,4 +306,3 @@ def _list_available_runs(root: Path, max_display: int = 10) -> str:
         return ", ".join(run_names)
     
     return ", ".join(run_names[:max_display]) + f", ... ({len(run_names) - max_display} more)"
-

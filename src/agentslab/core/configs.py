@@ -1,7 +1,8 @@
-
 from dataclasses import dataclass
-import torch
 from typing import Union
+
+import torch
+
 
 def _resolve_device(preferred: Union[str, torch.device, None]) -> torch.device:
     """
@@ -52,39 +53,38 @@ class GeneralConfigs:
     
     Attributes:
         algo_name: Название алгоритма (PPO, SAC, DQN, ...)
-        env_id: Идентификатор среды Gymnasium
+        env_name: Универсальный идентификатор среды. Используется как:
+            - env_id для Gymnasium ("CartPole-v1", "Ant-v4")
+            - scenario для VMAS ("navigation", "transport")
+            - task для PettingZoo ("mpe/simple_spread_v3")
         device: Устройство для вычислений
         seed: Random seed для воспроизводимости
         deterministic: Детерминированный режим PyTorch
         
     Example:
-        >>> cfg = GeneralConfigs(algo_name="PPO", env_id="CartPole-v1")
+        >>> cfg = GeneralConfigs(algo_name="PPO", env_name="CartPole-v1")
         >>> cfg.device
         device(type='cuda')
         
         >>> cfg = GeneralConfigs(
         ...     algo_name="SAC",
-        ...     env_id="Pendulum-v1",
+        ...     env_name="Pendulum-v1",
         ...     device="cpu",
         ...     seed=123,
         ... )
+        
+        >>> # VMAS
+        >>> cfg = GeneralConfigs(algo_name="MAPPO", env_name="navigation")
+        
+        >>> # PettingZoo
+        >>> cfg = GeneralConfigs(algo_name="IPPO", env_name="mpe/simple_spread_v3")
     """
     algo_name: str
-    env_id: str
+    env_name: str
     device: Union[str, torch.device] = "auto"
     seed: int = 42
     deterministic: bool = False
     
     def __post_init__(self):
         self.device = _resolve_device(self.device)
-    
-    @property
-    def env_name(self) -> str:
-        """Алиас для env_id (обратная совместимость)."""
-        return self.env_id
-    
-    @property 
-    def run_prefix(self) -> str:
-        """Префикс для имени run: 'PPO_CartPole-v1'."""
-        return f"{self.algo_name}_{self.env_id}"
 
