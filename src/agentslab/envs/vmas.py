@@ -7,7 +7,6 @@ Provides factory and utilities for VMAS multi-agent environments.
 from __future__ import annotations
 
 from typing import Any
-from dataclasses import replace
 
 from torchrl.envs import EnvBase, TransformedEnv
 from torchrl.envs.libs.vmas import VmasEnv
@@ -48,17 +47,13 @@ def make_env(config: VMASEnvConfig) -> EnvBase:
         env.set_seed(config.seed)
 
     # 3) Transforms
-    tcfg = config.transforms
-    if tcfg.step_counter and tcfg.max_steps is None:
-        tcfg = replace(tcfg, max_steps=config.max_steps)
-
-    # VMAS предоставляет эти атрибуты (fallback на стандартные)
+    # NOTE: max_steps обрабатывается нативно VmasEnv (эффективнее, чем StepCounter).
+    # Если нужен StepCounter — задайте TransformConfig.max_steps явно.
     obs_keys = getattr(env, "observation_keys", [("agents", "observation")])
     reward_keys = getattr(env, "reward_keys", [("agents", "reward")])
 
-    # reward_out_keys вычисляется внутри build_transforms на основе tcfg.reward_sum_key
     bundle = build_transforms(
-        tcfg,
+        config.transforms,
         obs_keys=list(obs_keys),
         reward_keys=list(reward_keys),
     )
@@ -68,8 +63,8 @@ def make_env(config: VMASEnvConfig) -> EnvBase:
         env = TransformedEnv(env, bundle.as_compose())
 
         # Init observation norm stats
-        if bundle.observation_norm and tcfg.observation_norm:
-            init_observation_norm(env, tcfg.observation_norm)
+        if bundle.observation_norm and config.transforms.observation_norm:
+            init_observation_norm(env, config.transforms.observation_norm)
 
     return env
 

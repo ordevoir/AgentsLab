@@ -44,18 +44,17 @@ def _get_group_names(env: PettingZooEnv) -> List[str]:
 def _get_marl_keys(
     env: PettingZooEnv,
     groups: List[str],
-) -> tuple[List[tuple], List[tuple], List[tuple]]:
+) -> tuple[List[tuple], List[tuple]]:
     """
     Формирует ключи для MARL трансформов.
 
     Returns:
-        (obs_keys, reward_keys, reward_out_keys)
+        (obs_keys, reward_keys)
     """
     obs_keys = [(g, "observation") for g in groups]
     reward_keys = [(g, "reward") for g in groups]
-    reward_out_keys = [(g, "episode_reward") for g in groups]
 
-    return obs_keys, reward_keys, reward_out_keys
+    return obs_keys, reward_keys
 
 
 def _make_transforms(config: PettingZooEnvConfig, env: EnvBase) -> TransformBundle:
@@ -70,7 +69,7 @@ def _make_transforms(config: PettingZooEnvConfig, env: EnvBase) -> TransformBund
         TransformBundle с трансформами.
     """
     groups = _get_group_names(env)
-    obs_keys, reward_keys, _ = _get_marl_keys(env, groups)
+    obs_keys, reward_keys = _get_marl_keys(env, groups)
 
     # ВАЖНО: reward_out_keys не задаём вручную — пусть build_transforms
     # сам сформирует out_keys на основе TransformConfig.reward_sum_key.
