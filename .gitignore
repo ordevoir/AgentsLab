@@ -5,3 +5,6 @@ __pycache__/
 .DS_Store
 runs/
 *.egg-info/
+junctions/
+.claude/
+.vscode/

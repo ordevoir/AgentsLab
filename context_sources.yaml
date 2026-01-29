@@ -1,0 +1,5 @@
+sources:
+  - ../../ExternalMental/AgentsLab
+  - ../../ExternalMental/KnowledgeBase/Machine Learning
+  - ../../ExternalMental/KnowledgeBase/Neural Networks
+  - ../../ExternalMental/KnowledgeBase/RL MARL
